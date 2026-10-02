@@ -224,17 +224,11 @@ export default function MapTab() {
           ref={globeRef}
           width={size.width}
           height={size.height}
-          globeTileEngineUrl={(x, y, l) => {
-            if (l <= SATELLITE_MAX_LEVEL) {
-              return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`
-            }
-            // CARTO's raster basemap serves @2x ("retina") tiles with
-            // double the pixel density for the same map area, so text
-            // labels stay crisp on high-DPI screens instead of a 256px
-            // tile being stretched across more physical pixels.
-            const retina = window.devicePixelRatio > 1 ? '@2x' : ''
-            return `https://basemaps.cartocdn.com/rastertiles/voyager/${l}/${x}/${y}${retina}.png`
-          }}
+          globeTileEngineUrl={(x, y, l) =>
+            l <= SATELLITE_MAX_LEVEL
+              ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`
+              : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${l}/${y}/${x}`
+          }
           backgroundImageUrl={`${import.meta.env.BASE_URL}globe/night-sky.png`}
           showAtmosphere
           atmosphereColor="#6fb8ff"
@@ -263,19 +257,15 @@ export default function MapTab() {
           }}
         />
         <div className="map-attribution">
-          Imagery &copy; Esri &mdash; Map &copy;{' '}
-          <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">
-            CARTO
-          </a>
-          ,{' '}
+          Basemap &copy;{' '}
           <a
-            href="https://www.openstreetmap.org/copyright"
+            href="https://www.esri.com/en-us/legal/terms/data-attributions"
             target="_blank"
             rel="noreferrer"
           >
-            OpenStreetMap
-          </a>{' '}
-          contributors
+            Esri
+          </a>
+          , HERE, Garmin, OpenStreetMap contributors
         </div>
       </div>
 
