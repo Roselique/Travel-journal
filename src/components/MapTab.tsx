@@ -141,7 +141,7 @@ export default function MapTab() {
           globeTileEngineUrl={(x, y, l) =>
             l <= SATELLITE_MAX_LEVEL
               ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`
-              : `https://maps.wikimedia.org/osm-intl/${l}/${x}/${y}.png`
+              : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${l}/${y}/${x}`
           }
           backgroundImageUrl={`${import.meta.env.BASE_URL}globe/night-sky.png`}
           showAtmosphere
@@ -168,15 +168,15 @@ export default function MapTab() {
           }}
         />
         <div className="map-attribution">
-          Imagery &copy; Esri &mdash; Map data &copy;{' '}
+          Basemap &copy;{' '}
           <a
-            href="https://www.openstreetmap.org/copyright"
+            href="https://www.esri.com/en-us/legal/terms/data-attributions"
             target="_blank"
             rel="noreferrer"
           >
-            OpenStreetMap
-          </a>{' '}
-          contributors
+            Esri
+          </a>
+          , HERE, Garmin, OpenStreetMap contributors
         </div>
       </div>
 
