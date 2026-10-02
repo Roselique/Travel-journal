@@ -134,9 +134,9 @@ export default function MapTab() {
           ref={globeRef}
           width={size.width}
           height={size.height}
-          globeImageUrl="/globe/earth-blue-marble.jpg"
-          bumpImageUrl="/globe/earth-topology.png"
-          backgroundImageUrl="/globe/night-sky.png"
+          globeImageUrl={`${import.meta.env.BASE_URL}globe/earth-blue-marble.jpg`}
+          bumpImageUrl={`${import.meta.env.BASE_URL}globe/earth-topology.png`}
+          backgroundImageUrl={`${import.meta.env.BASE_URL}globe/night-sky.png`}
           showAtmosphere
           atmosphereColor="#6fb8ff"
           atmosphereAltitude={0.18}
