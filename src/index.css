@@ -1,0 +1,508 @@
+:root {
+  --bg: #0b0e17;
+  --bg-panel: #141925;
+  --bg-panel-2: #1b2232;
+  --border: #2a3245;
+  --text: #e6e9f0;
+  --text-dim: #9aa4b8;
+  --accent: #4dabf7;
+  --accent-2: #69db7c;
+  --danger: #ff6b6b;
+
+  font: 16px/1.5 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5em 0.9em;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06111d;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+button.danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: rgba(255, 107, 107, 0.12);
+}
+
+button.small {
+  padding: 0.3em 0.6em;
+  font-size: 0.85em;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5em 0.7em;
+  width: 100%;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  font-size: 0.9em;
+  color: var(--text-dim);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.5em;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7em 1.2em;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 0.6em;
+}
+
+.app-header h1 {
+  font-size: 1.25em;
+  margin: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 0.4em;
+}
+
+.tab-btn {
+  background: transparent;
+  border-color: transparent;
+}
+
+.tab-btn.active {
+  background: var(--bg-panel-2);
+  border-color: var(--border);
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---------- Map tab ---------- */
+
+.map-tab {
+  display: flex;
+  height: 100%;
+}
+
+.globe-container {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: #000;
+}
+
+.side-panel {
+  width: 340px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  padding: 1em;
+  overflow-y: auto;
+}
+
+.hint {
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
+.search {
+  margin-bottom: 0.6em;
+}
+
+.pin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+
+.pin-list-item {
+  display: flex;
+  gap: 0.6em;
+  align-items: flex-start;
+  padding: 0.6em;
+  border-radius: 8px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.pin-list-item:hover {
+  border-color: var(--accent);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 0.3em;
+  flex-shrink: 0;
+}
+
+.pin-name {
+  font-weight: 600;
+}
+
+.pin-notes {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin-top: 0.2em;
+  white-space: pre-wrap;
+}
+
+.empty {
+  color: var(--text-dim);
+  list-style: none;
+  font-size: 0.9em;
+}
+
+.pin-form,
+.activity-form,
+.wish-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+  margin-bottom: 1em;
+}
+
+.pin-form-coords {
+  font-size: 0.8em;
+  color: var(--text-dim);
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.pin-form-actions {
+  display: flex;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.color-row {
+  display: flex;
+  gap: 0.4em;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  border: 2px solid transparent;
+}
+
+.swatch.selected {
+  border-color: var(--text);
+}
+
+/* ---------- Activities tab ---------- */
+
+.activities-tab {
+  display: flex;
+  height: 100%;
+}
+
+.location-list {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  padding: 1em;
+  overflow-y: auto;
+}
+
+.location-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.location-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 0.6em;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.location-item:hover {
+  background: var(--bg-panel-2);
+}
+
+.location-item.active {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--accent);
+}
+
+.location-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.activities-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 1.2em 1.5em;
+  overflow-y: auto;
+}
+
+.activity-form {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1em;
+  max-width: 520px;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 1.2em 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  max-width: 640px;
+}
+
+.activity-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.8em 1em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-dim);
+  border-radius: 8px;
+}
+
+.activity-item.status-planned {
+  border-left-color: var(--accent);
+}
+
+.activity-item.status-done {
+  border-left-color: var(--accent-2);
+  opacity: 0.75;
+}
+
+.activity-item.status-idea {
+  border-left-color: #ffd43b;
+}
+
+.activity-title {
+  font-weight: 600;
+}
+
+.activity-notes {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  margin-top: 0.2em;
+  white-space: pre-wrap;
+}
+
+.activity-date {
+  color: var(--text-dim);
+  font-size: 0.8em;
+  margin-top: 0.3em;
+}
+
+.activity-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.activity-controls select {
+  width: auto;
+}
+
+/* ---------- Wishlist tab ---------- */
+
+.wishlist-tab {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wishlist-form-panel {
+  width: 360px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  padding: 1.2em;
+  overflow-y: auto;
+}
+
+.wishlist-items {
+  flex: 1;
+  padding: 1.2em 1.5em;
+  overflow-y: auto;
+}
+
+.wishlist-items ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+  max-width: 680px;
+}
+
+.wish-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.9em 1.1em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.wish-title {
+  font-weight: 600;
+  font-size: 1.05em;
+}
+
+.wish-place {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin-top: 0.2em;
+}
+
+.wish-notes {
+  margin-top: 0.4em;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+}
+
+.wish-tags {
+  margin-top: 0.5em;
+  display: flex;
+  gap: 0.4em;
+  flex-wrap: wrap;
+}
+
+.tag {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15em 0.7em;
+  font-size: 0.78em;
+  color: var(--text-dim);
+}
+
+.wish-controls {
+  flex-shrink: 0;
+}
+
+/* ---------- Shared ---------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-dim);
+  padding: 2em;
+}
+
+.empty-state.small {
+  height: auto;
+  padding: 1.5em 0;
+}
