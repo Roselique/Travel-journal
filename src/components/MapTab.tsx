@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
+import countryLabels from '../data/countryLabels.json'
 import { PIN_COLORS, useTravelStore, type Pin } from '../store'
 
 interface PendingPin {
@@ -8,8 +9,12 @@ interface PendingPin {
 }
 
 // Below this zoom level, show the colorful satellite basemap (continent/world
-// view); above it, switch to the detailed English-labeled street map.
-const SATELLITE_MAX_LEVEL = 5
+// view); above it, switch to the detailed English-labeled topo map.
+const SATELLITE_MAX_LEVEL = 6
+
+// Country name labels only make sense at the zoomed-out whole-globe view;
+// hide them once the camera gets close enough that the basemap has its own labels.
+const COUNTRY_LABEL_MIN_ALTITUDE = 0.8
 
 function PinForm({
   initial,
@@ -127,9 +132,90 @@ export default function MapTab() {
     )
   }, [pins, search])
 
-  const flyTo = (lat: number, lng: number) => {
+  const [showCountryLabels, setShowCountryLabels] = useState(true)
+
+  const flyTo = useCallback((lat: number, lng: number) => {
     globeRef.current?.pointOfView({ lat, lng, altitude: 1.5 }, 1000)
-  }
+  }, [])
+
+  // Stable across renders: three-globe rebuilds every HTML marker whenever
+  // this function identity changes, so it must not depend on render-scoped
+  // state (pin selection is applied afterwards via a DOM class toggle instead).
+  const createPinElement = useCallback(
+    (d: object) => {
+      const pin = d as Pin
+      const anchor = document.createElement('div')
+      anchor.className = 'pin-marker-anchor'
+      anchor.dataset.pinId = pin.id
+
+      const dot = document.createElement('div')
+      dot.className = 'pin-marker'
+      dot.style.background = pin.color
+      dot.title = pin.name
+      anchor.appendChild(dot)
+
+      anchor.addEventListener('click', () => {
+        setSelectedId(pin.id)
+        setPending(null)
+        flyTo(pin.lat, pin.lng)
+      })
+
+      return anchor
+    },
+    [flyTo],
+  )
+
+  // Reflect the current selection onto marker DOM nodes (recreating them on
+  // every selection change would defeat the point of keeping createPinElement
+  // stable). A brand-new marker's DOM node is created asynchronously by the
+  // globe's own render loop, arbitrarily later than the React commit that
+  // added it to htmlElementsData, so a MutationObserver re-applies the
+  // current selection whenever markers actually appear, instead of assuming
+  // a fixed number of frames have passed.
+  const selectedIdRef = useRef(selectedId)
+  selectedIdRef.current = selectedId
+
+  const applySelectedClass = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    el.querySelectorAll<HTMLElement>('.pin-marker-anchor').forEach((node) => {
+      node
+        .querySelector('.pin-marker')
+        ?.classList.toggle('selected', node.dataset.pinId === selectedIdRef.current)
+    })
+  }, [])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new MutationObserver(applySelectedClass)
+    observer.observe(el, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [applySelectedClass])
+
+  // react-globe.gl's own click-to-raycast handler (which drives onGlobeClick)
+  // is bound in the capture phase on its internal container, an element
+  // between this wrapper div and the marker nodes — so it always fires
+  // alongside a marker's own click, and stopPropagation() from the marker
+  // can't reach back far enough to stop it. Instead, record on pointerdown
+  // whether the press started on a marker, and have onGlobeClick ignore
+  // itself in that case, so clicking a pin never also opens the "new pin"
+  // flow underneath it.
+  const clickedMarkerRef = useRef(false)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onPointerDown = (e: PointerEvent) => {
+      clickedMarkerRef.current = !!(e.target as HTMLElement).closest(
+        '.pin-marker-anchor',
+      )
+    }
+    el.addEventListener('pointerdown', onPointerDown, { capture: true })
+    return () =>
+      el.removeEventListener('pointerdown', onPointerDown, { capture: true })
+  }, [])
+
+  useEffect(applySelectedClass, [selectedId, applySelectedClass])
 
   return (
     <div className="map-tab">
@@ -141,28 +227,31 @@ export default function MapTab() {
           globeTileEngineUrl={(x, y, l) =>
             l <= SATELLITE_MAX_LEVEL
               ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`
-              : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${l}/${y}/${x}`
+              : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${l}/${y}/${x}`
           }
           backgroundImageUrl={`${import.meta.env.BASE_URL}globe/night-sky.png`}
           showAtmosphere
           atmosphereColor="#6fb8ff"
           atmosphereAltitude={0.18}
-          pointsData={pins}
-          pointLat={(d) => (d as Pin).lat}
-          pointLng={(d) => (d as Pin).lng}
-          pointColor={(d) => (d as Pin).color}
-          pointAltitude={(d) =>
-            (d as Pin).id === selectedId ? 0.04 : 0.015
-          }
-          pointRadius={(d) => ((d as Pin).id === selectedId ? 0.55 : 0.35)}
-          pointLabel={(d) => `${(d as Pin).name}`}
-          onPointClick={(d) => {
-            const pin = d as Pin
-            setSelectedId(pin.id)
-            setPending(null)
-            flyTo(pin.lat, pin.lng)
+          onZoom={({ altitude }) => {
+            const show = altitude > COUNTRY_LABEL_MIN_ALTITUDE
+            setShowCountryLabels((prev) => (prev === show ? prev : show))
           }}
+          labelsData={showCountryLabels ? countryLabels : []}
+          labelLat={(d) => (d as { lat: number }).lat}
+          labelLng={(d) => (d as { lng: number }).lng}
+          labelText={(d) => (d as { name: string }).name}
+          labelSize={0.6}
+          labelColor={() => 'rgba(255, 255, 255, 0.85)'}
+          labelDotRadius={0}
+          labelAltitude={0.005}
+          labelsTransitionDuration={0}
+          htmlElementsData={pins}
+          htmlLat={(d) => (d as Pin).lat}
+          htmlLng={(d) => (d as Pin).lng}
+          htmlElement={createPinElement}
           onGlobeClick={({ lat, lng }) => {
+            if (clickedMarkerRef.current) return
             setSelectedId(null)
             setPending({ lat, lng })
           }}

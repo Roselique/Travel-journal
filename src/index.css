@@ -168,6 +168,37 @@ h3 {
   background: #000;
 }
 
+.pin-marker-anchor {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.pin-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  transition: width 0.12s ease, height 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pin-marker-anchor:hover .pin-marker {
+  width: 18px;
+  height: 18px;
+}
+
+.pin-marker.selected {
+  width: 22px;
+  height: 22px;
+  border-width: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7), 0 0 0 3px rgba(255, 255, 255, 0.45);
+}
+
 .map-attribution {
   position: absolute;
   right: 0.6em;
