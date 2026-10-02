@@ -7,6 +7,10 @@ interface PendingPin {
   lng: number
 }
 
+// Below this zoom level, show the colorful satellite basemap (continent/world
+// view); above it, switch to the detailed English-labeled street map.
+const SATELLITE_MAX_LEVEL = 5
+
 function PinForm({
   initial,
   coords,
@@ -135,7 +139,9 @@ export default function MapTab() {
           width={size.width}
           height={size.height}
           globeTileEngineUrl={(x, y, l) =>
-            `https://tile.openstreetmap.org/${l}/${x}/${y}.png`
+            l <= SATELLITE_MAX_LEVEL
+              ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`
+              : `https://maps.wikimedia.org/osm-intl/${l}/${x}/${y}.png`
           }
           backgroundImageUrl={`${import.meta.env.BASE_URL}globe/night-sky.png`}
           showAtmosphere
@@ -162,7 +168,7 @@ export default function MapTab() {
           }}
         />
         <div className="map-attribution">
-          &copy;{' '}
+          Imagery &copy; Esri &mdash; Map data &copy;{' '}
           <a
             href="https://www.openstreetmap.org/copyright"
             target="_blank"
