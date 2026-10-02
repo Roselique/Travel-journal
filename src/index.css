@@ -168,6 +168,22 @@ h3 {
   background: #000;
 }
 
+.map-attribution {
+  position: absolute;
+  right: 0.6em;
+  bottom: 0.4em;
+  font-size: 0.72em;
+  color: rgba(230, 233, 240, 0.65);
+  background: rgba(11, 14, 23, 0.55);
+  padding: 0.15em 0.5em;
+  border-radius: 4px;
+  pointer-events: auto;
+}
+
+.map-attribution a {
+  color: inherit;
+}
+
 .side-panel {
   width: 340px;
   flex-shrink: 0;

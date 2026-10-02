@@ -134,8 +134,9 @@ export default function MapTab() {
           ref={globeRef}
           width={size.width}
           height={size.height}
-          globeImageUrl={`${import.meta.env.BASE_URL}globe/earth-blue-marble.jpg`}
-          bumpImageUrl={`${import.meta.env.BASE_URL}globe/earth-topology.png`}
+          globeTileEngineUrl={(x, y, l) =>
+            `https://tile.openstreetmap.org/${l}/${x}/${y}.png`
+          }
           backgroundImageUrl={`${import.meta.env.BASE_URL}globe/night-sky.png`}
           showAtmosphere
           atmosphereColor="#6fb8ff"
@@ -160,6 +161,17 @@ export default function MapTab() {
             setPending({ lat, lng })
           }}
         />
+        <div className="map-attribution">
+          &copy;{' '}
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noreferrer"
+          >
+            OpenStreetMap
+          </a>{' '}
+          contributors
+        </div>
       </div>
 
       <aside className="side-panel">
