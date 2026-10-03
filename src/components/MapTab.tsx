@@ -276,7 +276,13 @@ export default function MapTab() {
   selectedIdRef.current = selectedId
   const routeIdsRef = useRef(routeIds)
   routeIdsRef.current = routeIds
+  const pinsRef = useRef(pins)
+  pinsRef.current = pins
 
+  // Every DOM write here must be a no-op when nothing actually changed:
+  // this function is also the MutationObserver's own callback below, so an
+  // unconditional write (e.g. always reassigning textContent) re-triggers
+  // the observer on itself and spins forever, freezing the tab.
   const syncMarkerState = useCallback(() => {
     const el = containerRef.current
     if (!el) return
@@ -295,9 +301,33 @@ export default function MapTab() {
           badge.className = 'pin-badge'
           node.appendChild(badge)
         }
-        badge.textContent = String(routeIndex + 1)
+        const label = String(routeIndex + 1)
+        if (badge.textContent !== label) badge.textContent = label
       } else if (badge) {
         badge.remove()
+      }
+
+      // react-globe.gl never tears down a marker's old DOM node when the
+      // underlying pin object is replaced (e.g. after an edit), so the
+      // element handed to it at creation time can go stale. Re-apply the
+      // current kind's color/glyph directly so edits are reflected even
+      // when a fresh node wasn't actually created underneath.
+      const pin = pinsRef.current.find((p) => p.id === pinId)
+      if (!pin) return
+      const kind: PinKind = pin.kind ?? 'destination'
+      const color = PIN_KIND_INFO[kind].color
+      const circle = icon.querySelector<HTMLElement>('.pin-circle')
+      const tail = icon.querySelector<HTMLElement>('.pin-tail')
+      const glyph = icon.querySelector<HTMLElement>('.pin-glyph')
+      if (circle && circle.style.backgroundColor !== color) {
+        circle.style.background = color
+      }
+      if (tail && tail.style.borderTopColor !== color) {
+        tail.style.borderTopColor = color
+      }
+      if (glyph) {
+        const glyphClass = `pin-glyph ${kind === 'activity' ? 'pin-glyph-diamond' : 'pin-glyph-dot'}`
+        if (glyph.className !== glyphClass) glyph.className = glyphClass
       }
     })
   }, [])
