@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
-import countryLabels from '../data/countryLabels.json'
+import { compareContinents, continentFor, COUNTRY_LABELS } from '../lib/geo'
 import {
   estimateHours,
   fetchWalkingRoute,
@@ -26,22 +26,33 @@ const SATELLITE_MAX_LEVEL = 6
 // hide them once the camera gets close enough that the basemap has its own labels.
 const COUNTRY_LABEL_MIN_ALTITUDE = 0.8
 
-const PIN_KINDS: PinKind[] = ['destination', 'activity']
+const PIN_KINDS: PinKind[] = ['destination', 'activity', 'visited']
 const TRAVEL_MODES: TravelMode[] = ['walking', 'train', 'airplane']
 
-// Both pin kinds share the classic map-pin silhouette (what "make it look
+// Shape (dot/diamond/checkmark) and, for the checkmark, the text content
+// that distinguishes each pin kind's glyph inside the circle head.
+function pinGlyphFor(kind: PinKind): { className: string; text?: string } {
+  switch (kind) {
+    case 'activity':
+      return { className: 'pin-glyph pin-glyph-diamond' }
+    case 'visited':
+      return { className: 'pin-glyph pin-glyph-check', text: '✓' }
+    default:
+      return { className: 'pin-glyph pin-glyph-dot' }
+  }
+}
+
+// All pin kinds share the classic map-pin silhouette (what "make it look
 // more like pins" asked for) — a circle head with a triangular tail; the
-// glyph inside the head and the fill color are what actually tell a
-// destination pin apart from an activity pin. Built from plain shapes
-// (not SVG/filters) since that combination crashed the WebGL-overlaid
-// marker when tested.
+// glyph inside the head and the fill color are what actually tell them
+// apart. Built from plain shapes (not SVG/filters) since that combination
+// crashed the WebGL-overlaid marker when tested.
 function PinGlyphIcon({ kind, color }: { kind: PinKind; color: string }) {
+  const glyph = pinGlyphFor(kind)
   return (
     <span className="pin-glyph-icon">
       <span className="pin-circle" style={{ background: color }}>
-        <span
-          className={`pin-glyph ${kind === 'activity' ? 'pin-glyph-diamond' : 'pin-glyph-dot'}`}
-        />
+        <span className={glyph.className}>{glyph.text}</span>
       </span>
       <span className="pin-tail" style={{ borderTopColor: color }} />
     </span>
@@ -56,8 +67,10 @@ function buildPinGlyphElement(kind: PinKind, color: string): HTMLElement {
   circle.className = 'pin-circle'
   circle.style.background = color
 
+  const glyphInfo = pinGlyphFor(kind)
   const glyph = document.createElement('span')
-  glyph.className = `pin-glyph ${kind === 'activity' ? 'pin-glyph-diamond' : 'pin-glyph-dot'}`
+  glyph.className = glyphInfo.className
+  if (glyphInfo.text) glyph.textContent = glyphInfo.text
   circle.appendChild(glyph)
 
   const tail = document.createElement('span')
@@ -189,6 +202,22 @@ export default function MapTab() {
         p.name.toLowerCase().includes(q) || p.notes.toLowerCase().includes(q),
     )
   }, [pins, search])
+
+  const groupedPins = useMemo(() => {
+    const groups = new Map<string, Pin[]>()
+    for (const p of filteredPins) {
+      const continent = continentFor(p.lat, p.lng)
+      const list = groups.get(continent)
+      if (list) list.push(p)
+      else groups.set(continent, [p])
+    }
+    return [...groups.entries()]
+      .sort((a, b) => compareContinents(a[0], b[0]))
+      .map(([continent, list]) => ({
+        continent,
+        pins: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+  }, [filteredPins])
 
   const routePins = useMemo(
     () =>
@@ -383,8 +412,12 @@ export default function MapTab() {
         tail.style.borderTopColor = color
       }
       if (glyph) {
-        const glyphClass = `pin-glyph ${kind === 'activity' ? 'pin-glyph-diamond' : 'pin-glyph-dot'}`
-        if (glyph.className !== glyphClass) glyph.className = glyphClass
+        const glyphInfo = pinGlyphFor(kind)
+        if (glyph.className !== glyphInfo.className) {
+          glyph.className = glyphInfo.className
+        }
+        const text = glyphInfo.text ?? ''
+        if (glyph.textContent !== text) glyph.textContent = text
       }
     })
   }, [])
@@ -441,7 +474,7 @@ export default function MapTab() {
             const show = altitude > COUNTRY_LABEL_MIN_ALTITUDE
             setShowCountryLabels((prev) => (prev === show ? prev : show))
           }}
-          labelsData={showCountryLabels ? countryLabels : []}
+          labelsData={showCountryLabels ? COUNTRY_LABELS : []}
           labelLat={(d) => (d as { lat: number }).lat}
           labelLng={(d) => (d as { lng: number }).lng}
           labelText={(d) => (d as { name: string }).name}
@@ -604,34 +637,39 @@ export default function MapTab() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <ul className="pin-list">
-              {filteredPins.length === 0 && (
-                <li className="empty">No pins yet.</li>
-              )}
-              {filteredPins.map((p) => {
-                const kind = p.kind ?? 'destination'
-                return (
-                  <li
-                    key={p.id}
-                    className="pin-list-item"
-                    onClick={() => {
-                      setRouteIds([])
-                      setTravelMode(null)
-                      setSelectedId(p.id)
-                      flyTo(p.lat, p.lng)
-                    }}
-                  >
-                    <span className="pin-list-icon">
-                      <PinGlyphIcon kind={kind} color={PIN_KIND_INFO[kind].color} />
-                    </span>
-                    <div>
-                      <div className="pin-name">{p.name}</div>
-                      {p.notes && <div className="pin-notes">{p.notes}</div>}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+            {filteredPins.length === 0 && (
+              <p className="empty">No pins yet.</p>
+            )}
+            {groupedPins.map(({ continent, pins: group }) => (
+              <div key={continent} className="pin-group">
+                <h4 className="pin-group-heading">{continent}</h4>
+                <ul className="pin-list">
+                  {group.map((p) => {
+                    const kind = p.kind ?? 'destination'
+                    return (
+                      <li
+                        key={p.id}
+                        className="pin-list-item"
+                        onClick={() => {
+                          setRouteIds([])
+                          setTravelMode(null)
+                          setSelectedId(p.id)
+                          flyTo(p.lat, p.lng)
+                        }}
+                      >
+                        <span className="pin-list-icon">
+                          <PinGlyphIcon kind={kind} color={PIN_KIND_INFO[kind].color} />
+                        </span>
+                        <div>
+                          <div className="pin-name">{p.name}</div>
+                          {p.notes && <div className="pin-notes">{p.notes}</div>}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
           </>
         )}
       </aside>

@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 
 export type ActivityStatus = 'idea' | 'planned' | 'done'
 
-export type PinKind = 'destination' | 'activity'
+export type PinKind = 'destination' | 'activity' | 'visited'
 
 export const PIN_KIND_INFO: Record<
   PinKind,
@@ -12,6 +12,7 @@ export const PIN_KIND_INFO: Record<
 > = {
   destination: { label: 'Destination', color: '#ff6b6b' },
   activity: { label: 'Activity', color: '#9775fa' },
+  visited: { label: 'Visited', color: '#51cf66' },
 }
 
 export interface Pin {
