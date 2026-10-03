@@ -520,10 +520,17 @@ export default function MapTab() {
           htmlElement={createPinElement}
           onGlobeClick={({ lat, lng }) => {
             if (clickedMarkerRef.current) return
+            // If a pin panel, new-pin form, or route popup is open, the
+            // first click on empty space just dismisses it - it shouldn't
+            // also immediately start creating a new pin at that spot.
+            // Clicking empty space again afterward, with nothing open,
+            // does start a new pin as usual.
+            const hadSomethingOpen =
+              pending !== null || selectedId !== null || routeIds.length > 0
             setRouteIds([])
             setTravelMode(null)
             setSelectedId(null)
-            setPending({ lat, lng })
+            setPending(hadSomethingOpen ? null : { lat, lng })
           }}
         />
         <div className="map-attribution">
