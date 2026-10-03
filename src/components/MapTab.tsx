@@ -617,6 +617,7 @@ export default function MapTab() {
           <>
             <h3>New pin</h3>
             <PinForm
+              key="pending"
               coords={pending}
               onCancel={() => setPending(null)}
               onSave={({ name, notes, kind }) => {
@@ -637,6 +638,7 @@ export default function MapTab() {
           <>
             <h3>Edit pin</h3>
             <PinForm
+              key={selectedPin.id}
               initial={selectedPin}
               coords={selectedPin}
               onCancel={() => setSelectedId(null)}
