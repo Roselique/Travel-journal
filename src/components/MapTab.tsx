@@ -330,7 +330,13 @@ export default function MapTab() {
   const [showCountryLabels, setShowCountryLabels] = useState(true)
 
   const flyTo = useCallback((lat: number, lng: number) => {
-    globeRef.current?.pointOfView({ lat, lng, altitude: 1.5 }, 1000)
+    // Re-center on the pin without ever zooming OUT: keep the current
+    // altitude if already closer than 1.5, only zoom in to 1.5 when
+    // starting from a wider view. A fixed altitude here would yank the
+    // camera back out every time a pin is clicked while already zoomed in.
+    const current = globeRef.current?.pointOfView()
+    const altitude = current ? Math.min(current.altitude, 1.5) : 1.5
+    globeRef.current?.pointOfView({ lat, lng, altitude }, 1000)
   }, [])
 
   // Stable across renders: three-globe rebuilds every HTML marker whenever
