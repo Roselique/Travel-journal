@@ -177,6 +177,18 @@ export default function MapTab() {
   const [search, setSearch] = useState('')
   const [routeIds, setRouteIds] = useState<string[]>([])
   const [travelMode, setTravelMode] = useState<TravelMode | null>(null)
+  const [collapsedContinents, setCollapsedContinents] = useState<Set<string>>(
+    () => new Set(),
+  )
+
+  const toggleContinent = useCallback((continent: string) => {
+    setCollapsedContinents((prev) => {
+      const next = new Set(prev)
+      if (next.has(continent)) next.delete(continent)
+      else next.add(continent)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -640,36 +652,57 @@ export default function MapTab() {
             {filteredPins.length === 0 && (
               <p className="empty">No pins yet.</p>
             )}
-            {groupedPins.map(({ continent, pins: group }) => (
-              <div key={continent} className="pin-group">
-                <h4 className="pin-group-heading">{continent}</h4>
-                <ul className="pin-list">
-                  {group.map((p) => {
-                    const kind = p.kind ?? 'destination'
-                    return (
-                      <li
-                        key={p.id}
-                        className="pin-list-item"
-                        onClick={() => {
-                          setRouteIds([])
-                          setTravelMode(null)
-                          setSelectedId(p.id)
-                          flyTo(p.lat, p.lng)
-                        }}
-                      >
-                        <span className="pin-list-icon">
-                          <PinGlyphIcon kind={kind} color={PIN_KIND_INFO[kind].color} />
-                        </span>
-                        <div>
-                          <div className="pin-name">{p.name}</div>
-                          {p.notes && <div className="pin-notes">{p.notes}</div>}
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            ))}
+            {groupedPins.map(({ continent, pins: group }) => {
+              const collapsed = collapsedContinents.has(continent)
+              return (
+                <div key={continent} className="pin-group">
+                  <button
+                    type="button"
+                    className="pin-group-heading"
+                    onClick={() => toggleContinent(continent)}
+                    aria-expanded={!collapsed}
+                  >
+                    <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>
+                      ▾
+                    </span>
+                    {continent}
+                    <span className="pin-group-count">{group.length}</span>
+                  </button>
+                  {!collapsed && (
+                    <ul className="pin-list">
+                      {group.map((p) => {
+                        const kind = p.kind ?? 'destination'
+                        return (
+                          <li
+                            key={p.id}
+                            className="pin-list-item"
+                            onClick={() => {
+                              setRouteIds([])
+                              setTravelMode(null)
+                              setSelectedId(p.id)
+                              flyTo(p.lat, p.lng)
+                            }}
+                          >
+                            <span className="pin-list-icon">
+                              <PinGlyphIcon
+                                kind={kind}
+                                color={PIN_KIND_INFO[kind].color}
+                              />
+                            </span>
+                            <div>
+                              <div className="pin-name">{p.name}</div>
+                              {p.notes && (
+                                <div className="pin-notes">{p.notes}</div>
+                              )}
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
           </>
         )}
       </aside>

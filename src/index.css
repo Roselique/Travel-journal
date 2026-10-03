@@ -392,14 +392,46 @@ h3 {
 }
 
 .pin-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  width: 100%;
   margin: 0 0 0.4em;
+  font: inherit;
   font-size: 0.78em;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
+  background: none;
+  border: none;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 0.3em;
+  border-radius: 0;
+  padding: 0 0 0.3em;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pin-group-heading:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.pin-group-count {
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .pin-list {
