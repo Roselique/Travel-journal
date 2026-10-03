@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import countryLabels from '../data/countryLabels.json'
 import {
+  estimateHours,
+  fetchWalkingRoute,
   formatDuration,
   formatKm,
   haversineKm,
   TRAVEL_MODE_INFO,
+  type RouteResult,
   type TravelMode,
 } from '../lib/travel'
 import { PIN_KIND_INFO, useTravelStore, type Pin, type PinKind } from '../store'
@@ -209,7 +212,61 @@ export default function MapTab() {
     return out
   }, [routePins])
 
-  const totalKm = useMemo(() => legs.reduce((sum, l) => sum + l.km, 0), [legs])
+  // Walking is the one mode with a free, keyless routing service (OSRM)
+  // that can give a real path distance/time instead of a straight line, so
+  // fetch it per leg when walking is selected and cache by pin pair.
+  const [walkingRoutes, setWalkingRoutes] = useState<Record<string, RouteResult>>({})
+
+  useEffect(() => {
+    if (travelMode !== 'walking' || legs.length === 0) return
+    const controller = new AbortController()
+    legs.forEach((leg) => {
+      const key = `${leg.from.id}:${leg.to.id}`
+      if (walkingRoutes[key]) return
+      fetchWalkingRoute(
+        leg.from.lat,
+        leg.from.lng,
+        leg.to.lat,
+        leg.to.lng,
+        controller.signal,
+      ).then((result) => {
+        if (!result || controller.signal.aborted) return
+        setWalkingRoutes((prev) => ({ ...prev, [key]: result }))
+      })
+    })
+    return () => controller.abort()
+    // Deliberately excluding walkingRoutes: it's only read here to skip
+    // already-cached legs, and including it would re-run this effect (and
+    // abort in-flight fetches for other legs) every time one leg resolves.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [travelMode, legs])
+
+  const displayLegs = useMemo(
+    () =>
+      legs.map((leg) => {
+        if (travelMode === 'walking') {
+          const routed = walkingRoutes[`${leg.from.id}:${leg.to.id}`]
+          if (routed) return { ...leg, km: routed.km, hours: routed.hours, routed: true }
+        }
+        return {
+          ...leg,
+          hours: travelMode ? estimateHours(travelMode, leg.km) : 0,
+          routed: false,
+        }
+      }),
+    [legs, travelMode, walkingRoutes],
+  )
+
+  const totalKm = useMemo(
+    () => displayLegs.reduce((sum, l) => sum + l.km, 0),
+    [displayLegs],
+  )
+  const totalHours = useMemo(
+    () => displayLegs.reduce((sum, l) => sum + l.hours, 0),
+    [displayLegs],
+  )
+  const anyRouted = displayLegs.some((l) => l.routed)
+  const anyUnrouted = displayLegs.some((l) => !l.routed)
 
   const clearRoute = useCallback(() => {
     setRouteIds([])
@@ -446,28 +503,44 @@ export default function MapTab() {
             {travelMode && (
               <div className="travel-result">
                 <div className="travel-total">
-                  {formatKm(totalKm)} &bull; ~
-                  {formatDuration(
-                    totalKm / TRAVEL_MODE_INFO[travelMode].speedKmh,
-                  )}
+                  {formatKm(totalKm)} &bull; ~{formatDuration(totalHours)}
                 </div>
-                {legs.length > 1 && (
+                {displayLegs.length > 1 && (
                   <ul className="travel-legs">
-                    {legs.map((leg, i) => (
+                    {displayLegs.map((leg, i) => (
                       <li key={i}>
                         {leg.from.name} → {leg.to.name}: {formatKm(leg.km)}, ~
-                        {formatDuration(
-                          leg.km / TRAVEL_MODE_INFO[travelMode].speedKmh,
-                        )}
+                        {formatDuration(leg.hours)}
+                        {leg.routed && ' (real route)'}
                       </li>
                     ))}
                   </ul>
                 )}
                 <p className="travel-disclaimer">
-                  Estimate based on straight-line distance at a typical{' '}
-                  {TRAVEL_MODE_INFO[travelMode].label.toLowerCase()} speed
-                  &mdash; actual travel time will vary with real routes and
-                  schedules.
+                  {travelMode === 'walking' ? (
+                    anyRouted ? (
+                      anyUnrouted ? (
+                        <>
+                          Real walking-route time where available; straight-line
+                          estimate for the rest (no walking path found, likely
+                          overseas).
+                        </>
+                      ) : (
+                        <>Based on an actual walking route, not straight-line distance.</>
+                      )
+                    ) : (
+                      <>Looking up the real walking route&hellip;</>
+                    )
+                  ) : (
+                    <>
+                      Estimate based on straight-line distance
+                      {travelMode === 'airplane'
+                        ? ', plus typical taxi/climb/descent time'
+                        : ' at a typical train speed'}
+                      &mdash; actual travel time will vary with real routes and
+                      schedules.
+                    </>
+                  )}
                 </p>
               </div>
             )}
