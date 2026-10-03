@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import countryLabels from '../data/countryLabels.json'
-import { PIN_COLORS, useTravelStore, type Pin } from '../store'
+import {
+  formatDuration,
+  formatKm,
+  haversineKm,
+  TRAVEL_MODE_INFO,
+  type TravelMode,
+} from '../lib/travel'
+import { PIN_KIND_INFO, useTravelStore, type Pin, type PinKind } from '../store'
 
 interface PendingPin {
   lat: number
@@ -16,6 +23,49 @@ const SATELLITE_MAX_LEVEL = 6
 // hide them once the camera gets close enough that the basemap has its own labels.
 const COUNTRY_LABEL_MIN_ALTITUDE = 0.8
 
+const PIN_KINDS: PinKind[] = ['destination', 'activity']
+const TRAVEL_MODES: TravelMode[] = ['walking', 'train', 'airplane']
+
+// Both pin kinds share the classic map-pin silhouette (what "make it look
+// more like pins" asked for) — a circle head with a triangular tail; the
+// glyph inside the head and the fill color are what actually tell a
+// destination pin apart from an activity pin. Built from plain shapes
+// (not SVG/filters) since that combination crashed the WebGL-overlaid
+// marker when tested.
+function PinGlyphIcon({ kind, color }: { kind: PinKind; color: string }) {
+  return (
+    <span className="pin-glyph-icon">
+      <span className="pin-circle" style={{ background: color }}>
+        <span
+          className={`pin-glyph ${kind === 'activity' ? 'pin-glyph-diamond' : 'pin-glyph-dot'}`}
+        />
+      </span>
+      <span className="pin-tail" style={{ borderTopColor: color }} />
+    </span>
+  )
+}
+
+function buildPinGlyphElement(kind: PinKind, color: string): HTMLElement {
+  const icon = document.createElement('span')
+  icon.className = 'pin-glyph-icon'
+
+  const circle = document.createElement('span')
+  circle.className = 'pin-circle'
+  circle.style.background = color
+
+  const glyph = document.createElement('span')
+  glyph.className = `pin-glyph ${kind === 'activity' ? 'pin-glyph-diamond' : 'pin-glyph-dot'}`
+  circle.appendChild(glyph)
+
+  const tail = document.createElement('span')
+  tail.className = 'pin-tail'
+  tail.style.borderTopColor = color
+
+  icon.appendChild(circle)
+  icon.appendChild(tail)
+  return icon
+}
+
 function PinForm({
   initial,
   coords,
@@ -26,12 +76,12 @@ function PinForm({
   initial?: Pin
   coords: { lat: number; lng: number }
   onCancel: () => void
-  onSave: (data: { name: string; notes: string; color: string }) => void
+  onSave: (data: { name: string; notes: string; kind: PinKind }) => void
   onDelete?: () => void
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
-  const [color, setColor] = useState(initial?.color ?? PIN_COLORS[0])
+  const [kind, setKind] = useState<PinKind>(initial?.kind ?? 'destination')
 
   return (
     <form
@@ -39,7 +89,7 @@ function PinForm({
       onSubmit={(e) => {
         e.preventDefault()
         if (!name.trim()) return
-        onSave({ name: name.trim(), notes, color })
+        onSave({ name: name.trim(), notes, kind })
       }}
     >
       <div className="pin-form-coords">
@@ -64,16 +114,19 @@ function PinForm({
           rows={5}
         />
       </label>
-      <div className="color-row">
-        {PIN_COLORS.map((c) => (
+      <div className="kind-row">
+        {PIN_KINDS.map((k) => (
           <button
             type="button"
-            key={c}
-            className={`swatch ${color === c ? 'selected' : ''}`}
-            style={{ background: c }}
-            onClick={() => setColor(c)}
-            aria-label={`color ${c}`}
-          />
+            key={k}
+            className={`kind-btn ${kind === k ? 'selected' : ''}`}
+            onClick={() => setKind(k)}
+          >
+            <span className="kind-icon">
+              <PinGlyphIcon kind={k} color={PIN_KIND_INFO[k].color} />
+            </span>
+            {PIN_KIND_INFO[k].label}
+          </button>
         ))}
       </div>
       <div className="pin-form-actions">
@@ -106,6 +159,8 @@ export default function MapTab() {
   const [pending, setPending] = useState<PendingPin | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [routeIds, setRouteIds] = useState<string[]>([])
+  const [travelMode, setTravelMode] = useState<TravelMode | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -132,6 +187,35 @@ export default function MapTab() {
     )
   }, [pins, search])
 
+  const routePins = useMemo(
+    () =>
+      routeIds
+        .map((id) => pins.find((p) => p.id === id))
+        .filter((p): p is Pin => !!p),
+    [routeIds, pins],
+  )
+
+  const legs = useMemo(() => {
+    const out: { from: Pin; to: Pin; km: number }[] = []
+    for (let i = 0; i < routePins.length - 1; i++) {
+      const from = routePins[i]
+      const to = routePins[i + 1]
+      out.push({
+        from,
+        to,
+        km: haversineKm(from.lat, from.lng, to.lat, to.lng),
+      })
+    }
+    return out
+  }, [routePins])
+
+  const totalKm = useMemo(() => legs.reduce((sum, l) => sum + l.km, 0), [legs])
+
+  const clearRoute = useCallback(() => {
+    setRouteIds([])
+    setTravelMode(null)
+  }, [])
+
   const [showCountryLabels, setShowCountryLabels] = useState(true)
 
   const flyTo = useCallback((lat: number, lng: number) => {
@@ -140,21 +224,37 @@ export default function MapTab() {
 
   // Stable across renders: three-globe rebuilds every HTML marker whenever
   // this function identity changes, so it must not depend on render-scoped
-  // state (pin selection is applied afterwards via a DOM class toggle instead).
+  // state (selection/route membership is applied afterwards via a DOM class
+  // toggle instead).
   const createPinElement = useCallback(
     (d: object) => {
       const pin = d as Pin
+      const kind: PinKind = pin.kind ?? 'destination'
+      const color = PIN_KIND_INFO[kind].color
+
       const anchor = document.createElement('div')
       anchor.className = 'pin-marker-anchor'
       anchor.dataset.pinId = pin.id
 
-      const dot = document.createElement('div')
-      dot.className = 'pin-marker'
-      dot.style.background = pin.color
-      dot.title = pin.name
-      anchor.appendChild(dot)
+      const iconWrap = document.createElement('div')
+      iconWrap.className = 'pin-icon-wrap'
+      iconWrap.title = pin.name
+      iconWrap.appendChild(buildPinGlyphElement(kind, color))
+      anchor.appendChild(iconWrap)
 
-      anchor.addEventListener('click', () => {
+      anchor.addEventListener('click', (e) => {
+        if (e.shiftKey) {
+          setSelectedId(null)
+          setPending(null)
+          setRouteIds((prev) =>
+            prev.includes(pin.id)
+              ? prev.filter((id) => id !== pin.id)
+              : [...prev, pin.id],
+          )
+          return
+        }
+        setRouteIds([])
+        setTravelMode(null)
         setSelectedId(pin.id)
         setPending(null)
         flyTo(pin.lat, pin.lng)
@@ -165,33 +265,50 @@ export default function MapTab() {
     [flyTo],
   )
 
-  // Reflect the current selection onto marker DOM nodes (recreating them on
-  // every selection change would defeat the point of keeping createPinElement
-  // stable). A brand-new marker's DOM node is created asynchronously by the
-  // globe's own render loop, arbitrarily later than the React commit that
-  // added it to htmlElementsData, so a MutationObserver re-applies the
-  // current selection whenever markers actually appear, instead of assuming
-  // a fixed number of frames have passed.
+  // Reflect the current selection/route membership onto marker DOM nodes
+  // (recreating them on every change would defeat the point of keeping
+  // createPinElement stable). A brand-new marker's DOM node is created
+  // asynchronously by the globe's own render loop, arbitrarily later than
+  // the React commit that added it to htmlElementsData, so a
+  // MutationObserver re-applies state whenever markers actually appear,
+  // instead of assuming a fixed number of frames have passed.
   const selectedIdRef = useRef(selectedId)
   selectedIdRef.current = selectedId
+  const routeIdsRef = useRef(routeIds)
+  routeIdsRef.current = routeIds
 
-  const applySelectedClass = useCallback(() => {
+  const syncMarkerState = useCallback(() => {
     const el = containerRef.current
     if (!el) return
     el.querySelectorAll<HTMLElement>('.pin-marker-anchor').forEach((node) => {
-      node
-        .querySelector('.pin-marker')
-        ?.classList.toggle('selected', node.dataset.pinId === selectedIdRef.current)
+      const icon = node.querySelector<HTMLElement>('.pin-icon-wrap')
+      if (!icon) return
+      const pinId = node.dataset.pinId ?? ''
+      icon.classList.toggle('selected', pinId === selectedIdRef.current)
+      const routeIndex = routeIdsRef.current.indexOf(pinId)
+      icon.classList.toggle('in-route', routeIndex !== -1)
+
+      let badge = node.querySelector<HTMLElement>('.pin-badge')
+      if (routeIndex !== -1) {
+        if (!badge) {
+          badge = document.createElement('div')
+          badge.className = 'pin-badge'
+          node.appendChild(badge)
+        }
+        badge.textContent = String(routeIndex + 1)
+      } else if (badge) {
+        badge.remove()
+      }
     })
   }, [])
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const observer = new MutationObserver(applySelectedClass)
+    const observer = new MutationObserver(syncMarkerState)
     observer.observe(el, { childList: true, subtree: true })
     return () => observer.disconnect()
-  }, [applySelectedClass])
+  }, [syncMarkerState])
 
   // react-globe.gl's own click-to-raycast handler (which drives onGlobeClick)
   // is bound in the capture phase on its internal container, an element
@@ -215,7 +332,7 @@ export default function MapTab() {
       el.removeEventListener('pointerdown', onPointerDown, { capture: true })
   }, [])
 
-  useEffect(applySelectedClass, [selectedId, applySelectedClass])
+  useEffect(syncMarkerState, [selectedId, routeIds, syncMarkerState])
 
   return (
     <div className="map-tab">
@@ -252,6 +369,8 @@ export default function MapTab() {
           htmlElement={createPinElement}
           onGlobeClick={({ lat, lng }) => {
             if (clickedMarkerRef.current) return
+            setRouteIds([])
+            setTravelMode(null)
             setSelectedId(null)
             setPending({ lat, lng })
           }}
@@ -267,6 +386,63 @@ export default function MapTab() {
           </a>
           , HERE, Garmin, OpenStreetMap contributors
         </div>
+
+        {routePins.length >= 2 && (
+          <div className="travel-popup">
+            <div className="travel-popup-header">
+              <strong>{routePins.map((p) => p.name).join(' → ')}</strong>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={clearRoute}
+                aria-label="Clear route selection"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="travel-mode-row">
+              {TRAVEL_MODES.map((mode) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={`travel-mode-btn ${travelMode === mode ? 'active' : ''}`}
+                  onClick={() => setTravelMode(mode)}
+                >
+                  <span>{TRAVEL_MODE_INFO[mode].icon}</span>
+                  {TRAVEL_MODE_INFO[mode].label}
+                </button>
+              ))}
+            </div>
+            {travelMode && (
+              <div className="travel-result">
+                <div className="travel-total">
+                  {formatKm(totalKm)} &bull; ~
+                  {formatDuration(
+                    totalKm / TRAVEL_MODE_INFO[travelMode].speedKmh,
+                  )}
+                </div>
+                {legs.length > 1 && (
+                  <ul className="travel-legs">
+                    {legs.map((leg, i) => (
+                      <li key={i}>
+                        {leg.from.name} → {leg.to.name}: {formatKm(leg.km)}, ~
+                        {formatDuration(
+                          leg.km / TRAVEL_MODE_INFO[travelMode].speedKmh,
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="travel-disclaimer">
+                  Estimate based on straight-line distance at a typical{' '}
+                  {TRAVEL_MODE_INFO[travelMode].label.toLowerCase()} speed
+                  &mdash; actual travel time will vary with real routes and
+                  schedules.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <aside className="side-panel">
@@ -276,13 +452,14 @@ export default function MapTab() {
             <PinForm
               coords={pending}
               onCancel={() => setPending(null)}
-              onSave={({ name, notes, color }) => {
+              onSave={({ name, notes, kind }) => {
                 const id = addPin({
                   lat: pending.lat,
                   lng: pending.lng,
                   name,
                   notes,
-                  color,
+                  kind,
+                  color: PIN_KIND_INFO[kind].color,
                 })
                 setPending(null)
                 setSelectedId(id)
@@ -296,8 +473,13 @@ export default function MapTab() {
               initial={selectedPin}
               coords={selectedPin}
               onCancel={() => setSelectedId(null)}
-              onSave={(data) => {
-                updatePin(selectedPin.id, data)
+              onSave={({ name, notes, kind }) => {
+                updatePin(selectedPin.id, {
+                  name,
+                  notes,
+                  kind,
+                  color: PIN_KIND_INFO[kind].color,
+                })
                 setSelectedId(null)
               }}
               onDelete={() => {
@@ -309,7 +491,10 @@ export default function MapTab() {
         ) : (
           <>
             <h3>Pinned places</h3>
-            <p className="hint">Click anywhere on the globe to drop a pin.</p>
+            <p className="hint">
+              Click anywhere on the globe to drop a pin. Shift-click two or
+              more pins to compare travel time between them.
+            </p>
             <input
               className="search"
               placeholder="Search pins..."
@@ -320,22 +505,29 @@ export default function MapTab() {
               {filteredPins.length === 0 && (
                 <li className="empty">No pins yet.</li>
               )}
-              {filteredPins.map((p) => (
-                <li
-                  key={p.id}
-                  className="pin-list-item"
-                  onClick={() => {
-                    setSelectedId(p.id)
-                    flyTo(p.lat, p.lng)
-                  }}
-                >
-                  <span className="dot" style={{ background: p.color }} />
-                  <div>
-                    <div className="pin-name">{p.name}</div>
-                    {p.notes && <div className="pin-notes">{p.notes}</div>}
-                  </div>
-                </li>
-              ))}
+              {filteredPins.map((p) => {
+                const kind = p.kind ?? 'destination'
+                return (
+                  <li
+                    key={p.id}
+                    className="pin-list-item"
+                    onClick={() => {
+                      setRouteIds([])
+                      setTravelMode(null)
+                      setSelectedId(p.id)
+                      flyTo(p.lat, p.lng)
+                    }}
+                  >
+                    <span className="pin-list-icon">
+                      <PinGlyphIcon kind={kind} color={PIN_KIND_INFO[kind].color} />
+                    </span>
+                    <div>
+                      <div className="pin-name">{p.name}</div>
+                      {p.notes && <div className="pin-notes">{p.notes}</div>}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           </>
         )}

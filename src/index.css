@@ -169,34 +169,180 @@ h3 {
 }
 
 .pin-marker-anchor {
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 26px;
+  height: 68px;
   pointer-events: auto;
   cursor: pointer;
 }
 
-.pin-marker {
-  width: 14px;
-  height: 14px;
+.pin-icon-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 26px;
+  height: 34px;
+  transform-origin: 50% 100%;
+  transition: transform 0.12s ease;
+}
+
+.pin-marker-anchor:hover .pin-icon-wrap {
+  transform: scale(1.15);
+}
+
+.pin-icon-wrap.selected {
+  transform: scale(1.3);
+}
+
+/* Classic pin silhouette built from plain shapes (a circle head + a CSS
+   border-triangle tail) rather than inline SVG/filters, which proved
+   unstable to render as a CSS2D-overlaid WebGL marker. */
+.pin-circle {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-  transition: width 0.12s ease, height 0.12s ease, box-shadow 0.12s ease;
 }
 
-.pin-marker-anchor:hover .pin-marker {
-  width: 18px;
-  height: 18px;
+.pin-icon-wrap.selected .pin-circle {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), 0 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
-.pin-marker.selected {
-  width: 22px;
-  height: 22px;
-  border-width: 3px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7), 0 0 0 3px rgba(255, 255, 255, 0.45);
+.pin-icon-wrap.in-route .pin-circle {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 0 3px var(--accent);
+}
+
+.pin-tail {
+  position: absolute;
+  top: 20px;
+  left: 7px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 14px solid;
+}
+
+.pin-glyph {
+  position: absolute;
+  top: 11px;
+  left: 13px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+}
+
+.pin-glyph-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pin-glyph-diamond {
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.pin-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #06111d;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #fff;
+}
+
+.travel-popup {
+  position: absolute;
+  top: 1em;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 2em));
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9em 1em;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.travel-popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6em;
+  margin-bottom: 0.7em;
+}
+
+.travel-popup-header strong {
+  font-size: 0.95em;
+}
+
+.close-btn {
+  padding: 0.1em 0.5em;
+  flex-shrink: 0;
+}
+
+.travel-mode-row {
+  display: flex;
+  gap: 0.4em;
+}
+
+.travel-mode-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  padding: 0.5em;
+  font-size: 0.85em;
+}
+
+.travel-mode-btn span {
+  font-size: 1.2em;
+}
+
+.travel-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06111d;
+}
+
+.travel-result {
+  margin-top: 0.8em;
+  padding-top: 0.7em;
+  border-top: 1px solid var(--border);
+}
+
+.travel-total {
+  font-weight: 600;
+}
+
+.travel-legs {
+  list-style: none;
+  margin: 0.5em 0 0;
+  padding: 0;
+  font-size: 0.85em;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+}
+
+.travel-disclaimer {
+  margin: 0.6em 0 0;
+  font-size: 0.75em;
+  color: var(--text-dim);
 }
 
 .map-attribution {
@@ -265,6 +411,26 @@ h3 {
   flex-shrink: 0;
 }
 
+.pin-glyph-icon {
+  position: relative;
+  width: 26px;
+  height: 34px;
+}
+
+.pin-list-icon {
+  position: relative;
+  width: 16px;
+  height: 21px;
+  flex-shrink: 0;
+  margin-top: 0.1em;
+  overflow: hidden;
+}
+
+.pin-list-icon .pin-glyph-icon {
+  transform: scale(0.615);
+  transform-origin: top left;
+}
+
 .pin-name {
   font-weight: 600;
 }
@@ -303,21 +469,35 @@ h3 {
   flex-wrap: wrap;
 }
 
-.color-row {
+.kind-row {
   display: flex;
-  gap: 0.4em;
+  gap: 0.5em;
 }
 
-.swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  padding: 0;
-  border: 2px solid transparent;
+.kind-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.6em 0.4em;
 }
 
-.swatch.selected {
-  border-color: var(--text);
+.kind-btn.selected {
+  border-color: var(--accent);
+  background: var(--bg-panel);
+}
+
+.kind-icon {
+  position: relative;
+  width: 20px;
+  height: 26px;
+  overflow: hidden;
+}
+
+.kind-icon .pin-glyph-icon {
+  transform: scale(0.769);
+  transform-origin: top left;
 }
 
 /* ---------- Activities tab ---------- */

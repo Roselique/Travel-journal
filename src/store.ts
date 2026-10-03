@@ -4,12 +4,23 @@ import { v4 as uuid } from 'uuid'
 
 export type ActivityStatus = 'idea' | 'planned' | 'done'
 
+export type PinKind = 'destination' | 'activity'
+
+export const PIN_KIND_INFO: Record<
+  PinKind,
+  { label: string; color: string }
+> = {
+  destination: { label: 'Destination', color: '#ff6b6b' },
+  activity: { label: 'Activity', color: '#9775fa' },
+}
+
 export interface Pin {
   id: string
   lat: number
   lng: number
   name: string
   notes: string
+  kind: PinKind
   color: string
   createdAt: number
 }
@@ -33,16 +44,6 @@ export interface WishItem {
   tags: string
   createdAt: number
 }
-
-export const PIN_COLORS = [
-  '#ff6b6b',
-  '#ffa94d',
-  '#ffd43b',
-  '#69db7c',
-  '#4dabf7',
-  '#9775fa',
-  '#f783ac',
-]
 
 interface TravelState {
   pins: Pin[]
@@ -132,6 +133,19 @@ export const useTravelStore = create<TravelState>()(
         set((state) => ({ wishes: state.wishes.filter((w) => w.id !== id) }))
       },
     }),
-    { name: 'travel-journal-storage' },
+    {
+      name: 'travel-journal-storage',
+      version: 1,
+      migrate: (persisted) => {
+        const state = persisted as { pins?: Pin[] }
+        if (state.pins) {
+          state.pins = state.pins.map((p) => ({
+            ...p,
+            kind: p.kind ?? 'destination',
+          }))
+        }
+        return state
+      },
+    },
   ),
 )
