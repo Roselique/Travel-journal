@@ -114,9 +114,14 @@ export const COUNTRY_LABELS: { name: string; continent: string; lat: number; lng
 // a neighboring country's centroid than to the US's own). Falls back to
 // nearest country centroid only when no border actually contains the
 // point (open ocean, or right on a coastline at this data's resolution).
-export function continentFor(lat: number, lng: number): string {
+export function locateCountry(
+  lat: number,
+  lng: number,
+): { country: string; continent: string } {
   for (const border of borders) {
-    if (pointInBorder(lat, lng, border)) return border.continent
+    if (pointInBorder(lat, lng, border)) {
+      return { country: border.name, continent: border.continent }
+    }
   }
   let best = COUNTRY_LABELS[0]
   let bestKm = Infinity
@@ -127,5 +132,5 @@ export function continentFor(lat: number, lng: number): string {
       best = c
     }
   }
-  return best.continent
+  return { country: best.name, continent: best.continent }
 }

@@ -434,6 +434,36 @@ h3 {
   letter-spacing: normal;
 }
 
+.country-group {
+  margin: 0.3em 0 0.6em 0.9em;
+}
+
+.country-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  width: 100%;
+  margin: 0 0 0.3em;
+  font: inherit;
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.country-group-heading:hover {
+  color: var(--accent);
+}
+
+.country-group-heading .pin-group-count {
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
 .pin-list {
   list-style: none;
   margin: 0;

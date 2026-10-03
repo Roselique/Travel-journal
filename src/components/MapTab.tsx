@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
-import { compareContinents, continentFor, COUNTRY_LABELS } from '../lib/geo'
+import { compareContinents, locateCountry, COUNTRY_LABELS } from '../lib/geo'
 import {
   estimateHours,
   fetchWalkingRoute,
@@ -177,15 +177,17 @@ export default function MapTab() {
   const [search, setSearch] = useState('')
   const [routeIds, setRouteIds] = useState<string[]>([])
   const [travelMode, setTravelMode] = useState<TravelMode | null>(null)
-  const [collapsedContinents, setCollapsedContinents] = useState<Set<string>>(
+  // Keyed by "continent:<name>" or "country:<continent>:<name>" so both
+  // grouping levels share one collapse set.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(),
   )
 
-  const toggleContinent = useCallback((continent: string) => {
-    setCollapsedContinents((prev) => {
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev)
-      if (next.has(continent)) next.delete(continent)
-      else next.add(continent)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }, [])
@@ -216,18 +218,29 @@ export default function MapTab() {
   }, [pins, search])
 
   const groupedPins = useMemo(() => {
-    const groups = new Map<string, Pin[]>()
+    const continents = new Map<string, Map<string, Pin[]>>()
     for (const p of filteredPins) {
-      const continent = continentFor(p.lat, p.lng)
-      const list = groups.get(continent)
+      const { continent, country } = locateCountry(p.lat, p.lng)
+      let countries = continents.get(continent)
+      if (!countries) {
+        countries = new Map()
+        continents.set(continent, countries)
+      }
+      const list = countries.get(country)
       if (list) list.push(p)
-      else groups.set(continent, [p])
+      else countries.set(country, [p])
     }
-    return [...groups.entries()]
+    return [...continents.entries()]
       .sort((a, b) => compareContinents(a[0], b[0]))
-      .map(([continent, list]) => ({
+      .map(([continent, countries]) => ({
         continent,
-        pins: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+        count: [...countries.values()].reduce((sum, l) => sum + l.length, 0),
+        countries: [...countries.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([country, list]) => ({
+            country,
+            pins: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+          })),
       }))
   }, [filteredPins])
 
@@ -652,54 +665,84 @@ export default function MapTab() {
             {filteredPins.length === 0 && (
               <p className="empty">No pins yet.</p>
             )}
-            {groupedPins.map(({ continent, pins: group }) => {
-              const collapsed = collapsedContinents.has(continent)
+            {groupedPins.map(({ continent, count, countries }) => {
+              const continentKey = `continent:${continent}`
+              const continentCollapsed = collapsedGroups.has(continentKey)
               return (
                 <div key={continent} className="pin-group">
                   <button
                     type="button"
                     className="pin-group-heading"
-                    onClick={() => toggleContinent(continent)}
-                    aria-expanded={!collapsed}
+                    onClick={() => toggleGroup(continentKey)}
+                    aria-expanded={!continentCollapsed}
                   >
-                    <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>
+                    <span
+                      className={`chevron ${continentCollapsed ? 'collapsed' : ''}`}
+                    >
                       ▾
                     </span>
                     {continent}
-                    <span className="pin-group-count">{group.length}</span>
+                    <span className="pin-group-count">{count}</span>
                   </button>
-                  {!collapsed && (
-                    <ul className="pin-list">
-                      {group.map((p) => {
-                        const kind = p.kind ?? 'destination'
-                        return (
-                          <li
-                            key={p.id}
-                            className="pin-list-item"
-                            onClick={() => {
-                              setRouteIds([])
-                              setTravelMode(null)
-                              setSelectedId(p.id)
-                              flyTo(p.lat, p.lng)
-                            }}
+                  {!continentCollapsed &&
+                    countries.map(({ country, pins: group }) => {
+                      const countryKey = `country:${continent}:${country}`
+                      const countryCollapsed = collapsedGroups.has(countryKey)
+                      return (
+                        <div key={country} className="country-group">
+                          <button
+                            type="button"
+                            className="country-group-heading"
+                            onClick={() => toggleGroup(countryKey)}
+                            aria-expanded={!countryCollapsed}
                           >
-                            <span className="pin-list-icon">
-                              <PinGlyphIcon
-                                kind={kind}
-                                color={PIN_KIND_INFO[kind].color}
-                              />
+                            <span
+                              className={`chevron ${countryCollapsed ? 'collapsed' : ''}`}
+                            >
+                              ▾
                             </span>
-                            <div>
-                              <div className="pin-name">{p.name}</div>
-                              {p.notes && (
-                                <div className="pin-notes">{p.notes}</div>
-                              )}
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
+                            {country}
+                            <span className="pin-group-count">
+                              {group.length}
+                            </span>
+                          </button>
+                          {!countryCollapsed && (
+                            <ul className="pin-list">
+                              {group.map((p) => {
+                                const kind = p.kind ?? 'destination'
+                                return (
+                                  <li
+                                    key={p.id}
+                                    className="pin-list-item"
+                                    onClick={() => {
+                                      setRouteIds([])
+                                      setTravelMode(null)
+                                      setSelectedId(p.id)
+                                      flyTo(p.lat, p.lng)
+                                    }}
+                                  >
+                                    <span className="pin-list-icon">
+                                      <PinGlyphIcon
+                                        kind={kind}
+                                        color={PIN_KIND_INFO[kind].color}
+                                      />
+                                    </span>
+                                    <div>
+                                      <div className="pin-name">{p.name}</div>
+                                      {p.notes && (
+                                        <div className="pin-notes">
+                                          {p.notes}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      )
+                    })}
                 </div>
               )
             })}
