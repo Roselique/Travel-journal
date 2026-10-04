@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import { compareContinents, locateCountry, COUNTRY_LABELS } from '../lib/geo'
 import {
+  arcAltitudeForKm,
   estimateHours,
   fetchWalkingRoute,
   formatDuration,
   formatKm,
+  greatCircleMidpoint,
   haversineKm,
+  TRAVEL_MODE_ARC_COLOR,
   TRAVEL_MODE_INFO,
   type RouteResult,
   type TravelMode,
@@ -16,6 +19,19 @@ import { PIN_KIND_INFO, useTravelStore, type Pin, type PinKind } from '../store'
 interface PendingPin {
   lat: number
   lng: number
+}
+
+// Route-arc label datum, distinguished from a Pin by the `__legLabel` tag so
+// a single combined htmlElementsData array can hold both and createPinElement
+// can branch on which one it's building.
+interface LegLabelDatum {
+  __legLabel: true
+  id: string
+  lat: number
+  lng: number
+  altitude: number
+  text: string
+  mode: TravelMode
 }
 
 // Below this zoom level, show the colorful satellite basemap (continent/world
@@ -322,6 +338,42 @@ export default function MapTab() {
   const anyRouted = displayLegs.some((l) => l.routed)
   const anyUnrouted = displayLegs.some((l) => !l.routed)
 
+  // Curved dashed arcs between route pins, drawn once a travel mode is
+  // picked, each paired with a floating label (mode icon + time) placed
+  // above the arc's peak via a 3D altitude offset rather than a CSS trick.
+  const arcsData = useMemo(() => {
+    if (!travelMode) return []
+    return displayLegs.map((leg) => ({
+      startLat: leg.from.lat,
+      startLng: leg.from.lng,
+      endLat: leg.to.lat,
+      endLng: leg.to.lng,
+      altitude: arcAltitudeForKm(leg.km),
+      mode: travelMode,
+    }))
+  }, [displayLegs, travelMode])
+
+  const legLabelData = useMemo<LegLabelDatum[]>(() => {
+    if (!travelMode) return []
+    return displayLegs.map((leg, i) => {
+      const mid = greatCircleMidpoint(leg.from.lat, leg.from.lng, leg.to.lat, leg.to.lng)
+      return {
+        __legLabel: true,
+        id: `leg-${leg.from.id}-${leg.to.id}-${i}`,
+        lat: mid.lat,
+        lng: mid.lng,
+        altitude: arcAltitudeForKm(leg.km) + 0.06,
+        text: formatDuration(leg.hours),
+        mode: travelMode,
+      }
+    })
+  }, [displayLegs, travelMode])
+
+  const markerElementsData = useMemo(
+    () => [...pins, ...legLabelData],
+    [pins, legLabelData],
+  )
+
   const clearRoute = useCallback(() => {
     setRouteIds([])
     setTravelMode(null)
@@ -345,6 +397,18 @@ export default function MapTab() {
   // toggle instead).
   const createPinElement = useCallback(
     (d: object) => {
+      if ('__legLabel' in d) {
+        const label = d as LegLabelDatum
+        const anchor = document.createElement('div')
+        anchor.className = 'leg-label-anchor'
+        const pill = document.createElement('div')
+        pill.className = 'leg-label-pill'
+        pill.style.borderColor = TRAVEL_MODE_ARC_COLOR[label.mode]
+        pill.textContent = `${TRAVEL_MODE_INFO[label.mode].icon} ${label.text}`
+        anchor.appendChild(pill)
+        return anchor
+      }
+
       const pin = d as Pin
       const kind: PinKind = pin.kind ?? 'destination'
       const color = PIN_KIND_INFO[kind].color
@@ -514,9 +578,22 @@ export default function MapTab() {
           labelDotRadius={0}
           labelAltitude={0.005}
           labelsTransitionDuration={0}
-          htmlElementsData={pins}
-          htmlLat={(d) => (d as Pin).lat}
-          htmlLng={(d) => (d as Pin).lng}
+          arcsData={arcsData}
+          arcStartLat={(d) => (d as { startLat: number }).startLat}
+          arcStartLng={(d) => (d as { startLng: number }).startLng}
+          arcEndLat={(d) => (d as { endLat: number }).endLat}
+          arcEndLng={(d) => (d as { endLng: number }).endLng}
+          arcAltitude={(d) => (d as { altitude: number }).altitude}
+          arcColor={(d: object) => TRAVEL_MODE_ARC_COLOR[(d as { mode: TravelMode }).mode]}
+          arcStroke={0.5}
+          arcDashLength={0.4}
+          arcDashGap={0.2}
+          arcDashAnimateTime={2000}
+          arcsTransitionDuration={300}
+          htmlElementsData={markerElementsData}
+          htmlLat={(d) => (d as Pin | LegLabelDatum).lat}
+          htmlLng={(d) => (d as Pin | LegLabelDatum).lng}
+          htmlAltitude={(d) => ('__legLabel' in d ? (d as LegLabelDatum).altitude : 0)}
           htmlElement={createPinElement}
           onGlobeClick={({ lat, lng }) => {
             if (clickedMarkerRef.current) return

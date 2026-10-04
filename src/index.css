@@ -271,6 +271,23 @@ h3 {
   border: 1.5px solid #fff;
 }
 
+.leg-label-anchor {
+  /* No pointer-events: auto here (unlike .pin-marker-anchor) - these are
+     purely informational, so clicks fall through to the globe beneath. */
+  white-space: nowrap;
+}
+
+.leg-label-pill {
+  background: rgba(13, 18, 28, 0.9);
+  border: 1.5px solid;
+  border-radius: 999px;
+  padding: 0.25em 0.7em;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
 .travel-popup {
   position: absolute;
   top: 1em;
