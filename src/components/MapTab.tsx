@@ -377,6 +377,12 @@ export default function MapTab() {
   // Off by default (a static dashed line); the viewer can opt into an
   // animated dash flowing from the first selected pin to the second.
   const [animateRoute, setAnimateRoute] = useState(false)
+  // Off by default: clicking elsewhere on the map (empty space, another
+  // pin) clears the route as before. When on, the route/arc/label stays
+  // drawn until explicitly cleared via the popup's close button.
+  const [keepRoute, setKeepRoute] = useState(false)
+  const keepRouteRef = useRef(keepRoute)
+  keepRouteRef.current = keepRoute
 
   const clearRoute = useCallback(() => {
     setRouteIds([])
@@ -439,9 +445,11 @@ export default function MapTab() {
           )
           return
         }
-        setRouteIds([])
-        setTravelMode(null)
-        setAnimateRoute(false)
+        if (!keepRouteRef.current) {
+          setRouteIds([])
+          setTravelMode(null)
+          setAnimateRoute(false)
+        }
         setSelectedId(pin.id)
         setPending(null)
         flyTo(pin.lat, pin.lng)
@@ -607,12 +615,18 @@ export default function MapTab() {
             // first click on empty space just dismisses it - it shouldn't
             // also immediately start creating a new pin at that spot.
             // Clicking empty space again afterward, with nothing open,
-            // does start a new pin as usual.
+            // does start a new pin as usual. When "keep route" is on, the
+            // route itself doesn't count as "something open" to close -
+            // it stays drawn until explicitly cleared.
             const hadSomethingOpen =
-              pending !== null || selectedId !== null || routeIds.length > 0
-            setRouteIds([])
-            setTravelMode(null)
-            setAnimateRoute(false)
+              pending !== null ||
+              selectedId !== null ||
+              (!keepRoute && routeIds.length > 0)
+            if (!keepRoute) {
+              setRouteIds([])
+              setTravelMode(null)
+              setAnimateRoute(false)
+            }
             setSelectedId(null)
             setPending(hadSomethingOpen ? null : { lat, lng })
           }}
@@ -667,6 +681,14 @@ export default function MapTab() {
                     onChange={(e) => setAnimateRoute(e.target.checked)}
                   />
                   Animate direction ({routePins[0]?.name} → {routePins[routePins.length - 1]?.name})
+                </label>
+                <label className="animate-route-toggle">
+                  <input
+                    type="checkbox"
+                    checked={keepRoute}
+                    onChange={(e) => setKeepRoute(e.target.checked)}
+                  />
+                  Keep line when clicking elsewhere
                 </label>
                 {displayLegs.length > 1 && (
                   <ul className="travel-legs">
@@ -822,9 +844,11 @@ export default function MapTab() {
                                     key={p.id}
                                     className="pin-list-item"
                                     onClick={() => {
-                                      setRouteIds([])
-                                      setTravelMode(null)
-                                      setAnimateRoute(false)
+                                      if (!keepRoute) {
+                                        setRouteIds([])
+                                        setTravelMode(null)
+                                        setAnimateRoute(false)
+                                      }
                                       setSelectedId(p.id)
                                       flyTo(p.lat, p.lng)
                                     }}
