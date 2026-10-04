@@ -272,8 +272,11 @@ h3 {
 }
 
 .leg-label-anchor {
-  /* No pointer-events: auto here (unlike .pin-marker-anchor) - these are
-     purely informational, so clicks fall through to the globe beneath. */
+  /* Unlike most CSS2D overlays this one IS clickable (reopens the travel
+     popup), so it opts back into pointer-events like .pin-marker-anchor
+     does, rather than leaving the container's default none in place. */
+  pointer-events: auto;
+  cursor: pointer;
   white-space: nowrap;
 }
 

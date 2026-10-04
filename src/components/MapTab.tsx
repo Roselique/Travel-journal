@@ -379,15 +379,19 @@ export default function MapTab() {
   const [animateRoute, setAnimateRoute] = useState(false)
   // Off by default: clicking elsewhere on the map (empty space, another
   // pin) clears the route as before. When on, the route/arc/label stays
-  // drawn until explicitly cleared via the popup's close button.
+  // drawn - only the popup window itself closes - and clicking the arc or
+  // its label reopens the popup.
   const [keepRoute, setKeepRoute] = useState(false)
   const keepRouteRef = useRef(keepRoute)
   keepRouteRef.current = keepRoute
+
+  const [routePopupOpen, setRoutePopupOpen] = useState(false)
 
   const clearRoute = useCallback(() => {
     setRouteIds([])
     setTravelMode(null)
     setAnimateRoute(false)
+    setRoutePopupOpen(false)
   }, [])
 
   const [showCountryLabels, setShowCountryLabels] = useState(true)
@@ -417,6 +421,10 @@ export default function MapTab() {
         pill.style.borderColor = TRAVEL_MODE_ARC_COLOR[label.mode]
         pill.textContent = `${TRAVEL_MODE_INFO[label.mode].icon} ${label.text}`
         anchor.appendChild(pill)
+        anchor.addEventListener('click', (e) => {
+          e.stopPropagation()
+          setRoutePopupOpen(true)
+        })
         return anchor
       }
 
@@ -438,11 +446,11 @@ export default function MapTab() {
         if (e.shiftKey) {
           setSelectedId(null)
           setPending(null)
-          setRouteIds((prev) =>
-            prev.includes(pin.id)
-              ? prev.filter((id) => id !== pin.id)
-              : [...prev, pin.id],
-          )
+          const next = routeIdsRef.current.includes(pin.id)
+            ? routeIdsRef.current.filter((id) => id !== pin.id)
+            : [...routeIdsRef.current, pin.id]
+          setRouteIds(next)
+          if (next.length >= 2) setRoutePopupOpen(true)
           return
         }
         if (!keepRouteRef.current) {
@@ -450,6 +458,7 @@ export default function MapTab() {
           setTravelMode(null)
           setAnimateRoute(false)
         }
+        setRoutePopupOpen(false)
         setSelectedId(pin.id)
         setPending(null)
         flyTo(pin.lat, pin.lng)
@@ -604,6 +613,7 @@ export default function MapTab() {
           arcDashGap={0.045}
           arcDashAnimateTime={animateRoute ? 3000 : 0}
           arcsTransitionDuration={300}
+          onArcClick={() => setRoutePopupOpen(true)}
           htmlElementsData={markerElementsData}
           htmlLat={(d) => (d as Pin | LegLabelDatum).lat}
           htmlLng={(d) => (d as Pin | LegLabelDatum).lng}
@@ -615,18 +625,18 @@ export default function MapTab() {
             // first click on empty space just dismisses it - it shouldn't
             // also immediately start creating a new pin at that spot.
             // Clicking empty space again afterward, with nothing open,
-            // does start a new pin as usual. When "keep route" is on, the
-            // route itself doesn't count as "something open" to close -
-            // it stays drawn until explicitly cleared.
+            // does start a new pin as usual. The route popup always
+            // closes on an outside click; when "keep route" is on, the
+            // arc/label themselves stay drawn and clicking either one
+            // reopens the popup.
             const hadSomethingOpen =
-              pending !== null ||
-              selectedId !== null ||
-              (!keepRoute && routeIds.length > 0)
+              pending !== null || selectedId !== null || routePopupOpen
             if (!keepRoute) {
               setRouteIds([])
               setTravelMode(null)
               setAnimateRoute(false)
             }
+            setRoutePopupOpen(false)
             setSelectedId(null)
             setPending(hadSomethingOpen ? null : { lat, lng })
           }}
@@ -643,7 +653,7 @@ export default function MapTab() {
           , HERE, Garmin, OpenStreetMap contributors
         </div>
 
-        {routePins.length >= 2 && (
+        {routePins.length >= 2 && routePopupOpen && (
           <div className="travel-popup">
             <div className="travel-popup-header">
               <strong>{routePins.map((p) => p.name).join(' → ')}</strong>
@@ -849,6 +859,7 @@ export default function MapTab() {
                                         setTravelMode(null)
                                         setAnimateRoute(false)
                                       }
+                                      setRoutePopupOpen(false)
                                       setSelectedId(p.id)
                                       flyTo(p.lat, p.lng)
                                     }}
