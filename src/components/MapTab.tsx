@@ -374,9 +374,14 @@ export default function MapTab() {
     [pins, legLabelData],
   )
 
+  // Off by default (a static dashed line); the viewer can opt into an
+  // animated dash flowing from the first selected pin to the second.
+  const [animateRoute, setAnimateRoute] = useState(false)
+
   const clearRoute = useCallback(() => {
     setRouteIds([])
     setTravelMode(null)
+    setAnimateRoute(false)
   }, [])
 
   const [showCountryLabels, setShowCountryLabels] = useState(true)
@@ -436,6 +441,7 @@ export default function MapTab() {
         }
         setRouteIds([])
         setTravelMode(null)
+        setAnimateRoute(false)
         setSelectedId(pin.id)
         setPending(null)
         flyTo(pin.lat, pin.lng)
@@ -585,10 +591,10 @@ export default function MapTab() {
           arcEndLng={(d) => (d as { endLng: number }).endLng}
           arcAltitude={(d) => (d as { altitude: number }).altitude}
           arcColor={(d: object) => TRAVEL_MODE_ARC_COLOR[(d as { mode: TravelMode }).mode]}
-          arcStroke={0.5}
-          arcDashLength={0.4}
-          arcDashGap={0.2}
-          arcDashAnimateTime={2000}
+          arcStroke={0.15}
+          arcDashLength={0.06}
+          arcDashGap={0.045}
+          arcDashAnimateTime={animateRoute ? 3000 : 0}
           arcsTransitionDuration={300}
           htmlElementsData={markerElementsData}
           htmlLat={(d) => (d as Pin | LegLabelDatum).lat}
@@ -606,6 +612,7 @@ export default function MapTab() {
               pending !== null || selectedId !== null || routeIds.length > 0
             setRouteIds([])
             setTravelMode(null)
+            setAnimateRoute(false)
             setSelectedId(null)
             setPending(hadSomethingOpen ? null : { lat, lng })
           }}
@@ -653,6 +660,14 @@ export default function MapTab() {
                 <div className="travel-total">
                   {formatKm(totalKm)} &bull; ~{formatDuration(totalHours)}
                 </div>
+                <label className="animate-route-toggle">
+                  <input
+                    type="checkbox"
+                    checked={animateRoute}
+                    onChange={(e) => setAnimateRoute(e.target.checked)}
+                  />
+                  Animate direction ({routePins[0]?.name} → {routePins[routePins.length - 1]?.name})
+                </label>
                 {displayLegs.length > 1 && (
                   <ul className="travel-legs">
                     {displayLegs.map((leg, i) => (
@@ -809,6 +824,7 @@ export default function MapTab() {
                                     onClick={() => {
                                       setRouteIds([])
                                       setTravelMode(null)
+                                      setAnimateRoute(false)
                                       setSelectedId(p.id)
                                       flyTo(p.lat, p.lng)
                                     }}
