@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import { compareContinents, locateCountry, COUNTRY_LABELS } from '../lib/geo'
 import {
@@ -23,7 +31,9 @@ interface PendingPin {
 
 // Route-arc label datum, distinguished from a Pin by the `__legLabel` tag so
 // a single combined htmlElementsData array can hold both and createPinElement
-// can branch on which one it's building.
+// can branch on which one it's building. routeKey is 'live' for the route
+// currently being built/edited in the popup, or a frozen route's id - it's
+// how a click on the label knows which route to reopen.
 interface LegLabelDatum {
   __legLabel: true
   id: string
@@ -32,6 +42,116 @@ interface LegLabelDatum {
   altitude: number
   text: string
   mode: TravelMode
+  routeKey: string
+}
+
+// A route that was "kept" (its popup closed while the keep-route checkbox
+// was on) - its arc/label stay drawn independently of whatever route is
+// currently being built, so building a new route never appends to this one.
+interface FrozenRoute {
+  id: string
+  pinIds: string[]
+  mode: TravelMode
+  animate: boolean
+}
+
+interface Leg {
+  from: Pin
+  to: Pin
+  km: number
+}
+
+interface DisplayLeg extends Leg {
+  hours: number
+  routed: boolean
+}
+
+function legsForPinIds(pinIds: string[], pins: Pin[]): Leg[] {
+  const routePins = pinIds
+    .map((id) => pins.find((p) => p.id === id))
+    .filter((p): p is Pin => !!p)
+  const out: Leg[] = []
+  for (let i = 0; i < routePins.length - 1; i++) {
+    const from = routePins[i]
+    const to = routePins[i + 1]
+    out.push({ from, to, km: haversineKm(from.lat, from.lng, to.lat, to.lng) })
+  }
+  return out
+}
+
+function applyTravelMode(
+  legs: Leg[],
+  mode: TravelMode,
+  walkingRoutes: Record<string, RouteResult>,
+): DisplayLeg[] {
+  return legs.map((leg) => {
+    if (mode === 'walking') {
+      const routed = walkingRoutes[`${leg.from.id}:${leg.to.id}`]
+      if (routed) return { ...leg, km: routed.km, hours: routed.hours, routed: true }
+    }
+    return { ...leg, hours: estimateHours(mode, leg.km), routed: false }
+  })
+}
+
+// Plain functions (not hooks) so they can be called equally from a stable,
+// memoized event handler (via refs holding the latest values) and from a
+// freshly-created inline one, with no dependency-ordering constraints.
+//
+// Closing the live route: if "keep route" is on and there's a complete
+// route with a mode picked, freeze it into its own kept arc/label and
+// reset the live slot, so the next pin selection starts a brand new route
+// instead of extending the frozen one. Otherwise, clear as before.
+function freezeOrClearRoute(args: {
+  keepRoute: boolean
+  travelMode: TravelMode | null
+  routeIds: string[]
+  animateRoute: boolean
+  setFrozenRoutes: Dispatch<SetStateAction<FrozenRoute[]>>
+  setRouteIds: Dispatch<SetStateAction<string[]>>
+  setTravelMode: Dispatch<SetStateAction<TravelMode | null>>
+  setAnimateRoute: Dispatch<SetStateAction<boolean>>
+  setRoutePopupOpen: Dispatch<SetStateAction<boolean>>
+}) {
+  const { keepRoute, travelMode, routeIds, animateRoute } = args
+  if (keepRoute && travelMode && routeIds.length >= 2) {
+    args.setFrozenRoutes((prev) => [
+      ...prev,
+      {
+        id: `frozen-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        pinIds: routeIds,
+        mode: travelMode,
+        animate: animateRoute,
+      },
+    ])
+    args.setRouteIds([])
+    args.setTravelMode(null)
+    args.setAnimateRoute(false)
+  } else if (!keepRoute) {
+    args.setRouteIds([])
+    args.setTravelMode(null)
+    args.setAnimateRoute(false)
+  }
+  args.setRoutePopupOpen(false)
+}
+
+// Pulls a kept route back into the live slot so its popup can be reopened
+// (and, if closed again, re-frozen).
+function reviveFrozenRoute(
+  routeKey: string,
+  frozenRoutes: FrozenRoute[],
+  setFrozenRoutes: Dispatch<SetStateAction<FrozenRoute[]>>,
+  setRouteIds: Dispatch<SetStateAction<string[]>>,
+  setTravelMode: Dispatch<SetStateAction<TravelMode | null>>,
+  setAnimateRoute: Dispatch<SetStateAction<boolean>>,
+  setRoutePopupOpen: Dispatch<SetStateAction<boolean>>,
+) {
+  const found = frozenRoutes.find((r) => r.id === routeKey)
+  if (!found) return
+  setFrozenRoutes((prev) => prev.filter((r) => r.id !== routeKey))
+  setRouteIds(found.pinIds)
+  setTravelMode(found.mode)
+  setAnimateRoute(found.animate)
+  setRoutePopupOpen(true)
 }
 
 // Below this zoom level, show the colorful satellite basemap (continent/world
@@ -193,6 +313,18 @@ export default function MapTab() {
   const [search, setSearch] = useState('')
   const [routeIds, setRouteIds] = useState<string[]>([])
   const [travelMode, setTravelMode] = useState<TravelMode | null>(null)
+  // Off by default (a static dashed line); the viewer can opt into an
+  // animated dash flowing from the first selected pin to the second.
+  const [animateRoute, setAnimateRoute] = useState(false)
+  // Off by default: clicking elsewhere on the map (empty space, another
+  // pin) clears the route as before. When on, closing the popup "freezes"
+  // the route into a kept arc/label instead of clearing it, and the next
+  // pin selection starts a brand new route rather than extending it.
+  const [keepRoute, setKeepRoute] = useState(false)
+  const keepRouteRef = useRef(keepRoute)
+  keepRouteRef.current = keepRoute
+
+  const [routePopupOpen, setRoutePopupOpen] = useState(false)
   // Keyed by "continent:<name>" or "country:<continent>:<name>" so both
   // grouping levels share one collapse set.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -268,29 +400,31 @@ export default function MapTab() {
     [routeIds, pins],
   )
 
-  const legs = useMemo(() => {
-    const out: { from: Pin; to: Pin; km: number }[] = []
-    for (let i = 0; i < routePins.length - 1; i++) {
-      const from = routePins[i]
-      const to = routePins[i + 1]
-      out.push({
-        from,
-        to,
-        km: haversineKm(from.lat, from.lng, to.lat, to.lng),
-      })
-    }
-    return out
-  }, [routePins])
+  const legs = useMemo(() => legsForPinIds(routeIds, pins), [routeIds, pins])
+
+  // Previously-closed, "kept" routes - each drawn as its own arc/label,
+  // independent of whatever route is currently being built in routeIds.
+  const [frozenRoutes, setFrozenRoutes] = useState<FrozenRoute[]>([])
 
   // Walking is the one mode with a free, keyless routing service (OSRM)
   // that can give a real path distance/time instead of a straight line, so
-  // fetch it per leg when walking is selected and cache by pin pair.
+  // fetch it per leg when walking is selected and cache by pin pair. This
+  // covers both the live route and any kept walking routes.
   const [walkingRoutes, setWalkingRoutes] = useState<Record<string, RouteResult>>({})
 
+  const walkingLegsToFetch = useMemo(() => {
+    const out: Leg[] = []
+    if (travelMode === 'walking') out.push(...legs)
+    for (const fr of frozenRoutes) {
+      if (fr.mode === 'walking') out.push(...legsForPinIds(fr.pinIds, pins))
+    }
+    return out
+  }, [travelMode, legs, frozenRoutes, pins])
+
   useEffect(() => {
-    if (travelMode !== 'walking' || legs.length === 0) return
+    if (walkingLegsToFetch.length === 0) return
     const controller = new AbortController()
-    legs.forEach((leg) => {
+    walkingLegsToFetch.forEach((leg) => {
       const key = `${leg.from.id}:${leg.to.id}`
       if (walkingRoutes[key]) return
       fetchWalkingRoute(
@@ -309,21 +443,10 @@ export default function MapTab() {
     // already-cached legs, and including it would re-run this effect (and
     // abort in-flight fetches for other legs) every time one leg resolves.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [travelMode, legs])
+  }, [walkingLegsToFetch])
 
   const displayLegs = useMemo(
-    () =>
-      legs.map((leg) => {
-        if (travelMode === 'walking') {
-          const routed = walkingRoutes[`${leg.from.id}:${leg.to.id}`]
-          if (routed) return { ...leg, km: routed.km, hours: routed.hours, routed: true }
-        }
-        return {
-          ...leg,
-          hours: travelMode ? estimateHours(travelMode, leg.km) : 0,
-          routed: false,
-        }
-      }),
+    () => (travelMode ? applyTravelMode(legs, travelMode, walkingRoutes) : []),
     [legs, travelMode, walkingRoutes],
   )
 
@@ -341,52 +464,68 @@ export default function MapTab() {
   // Curved dashed arcs between route pins, drawn once a travel mode is
   // picked, each paired with a floating label (mode icon + time) placed
   // above the arc's peak via a 3D altitude offset rather than a CSS trick.
-  const arcsData = useMemo(() => {
-    if (!travelMode) return []
-    return displayLegs.map((leg) => ({
-      startLat: leg.from.lat,
-      startLng: leg.from.lng,
-      endLat: leg.to.lat,
-      endLng: leg.to.lng,
-      altitude: arcAltitudeForKm(leg.km),
-      mode: travelMode,
-    }))
-  }, [displayLegs, travelMode])
+  // Combines the route currently being built (routeKey 'live') with every
+  // kept/frozen route, each independent of the others.
+  const routeGroups = useMemo(() => {
+    const groups: { key: string; legs: DisplayLeg[]; mode: TravelMode; animate: boolean }[] = []
+    if (travelMode && routePins.length >= 2) {
+      groups.push({ key: 'live', legs: displayLegs, mode: travelMode, animate: animateRoute })
+    }
+    for (const fr of frozenRoutes) {
+      groups.push({
+        key: fr.id,
+        legs: applyTravelMode(legsForPinIds(fr.pinIds, pins), fr.mode, walkingRoutes),
+        mode: fr.mode,
+        animate: fr.animate,
+      })
+    }
+    return groups
+  }, [travelMode, routePins.length, displayLegs, animateRoute, frozenRoutes, pins, walkingRoutes])
 
-  const legLabelData = useMemo<LegLabelDatum[]>(() => {
-    if (!travelMode) return []
-    return displayLegs.map((leg, i) => {
-      const mid = greatCircleMidpoint(leg.from.lat, leg.from.lng, leg.to.lat, leg.to.lng)
-      return {
-        __legLabel: true,
-        id: `leg-${leg.from.id}-${leg.to.id}-${i}`,
-        lat: mid.lat,
-        lng: mid.lng,
-        altitude: arcAltitudeForKm(leg.km) + 0.06,
-        text: formatDuration(leg.hours),
-        mode: travelMode,
-      }
-    })
-  }, [displayLegs, travelMode])
+  const arcsData = useMemo(
+    () =>
+      routeGroups.flatMap((group) =>
+        group.legs.map((leg) => ({
+          startLat: leg.from.lat,
+          startLng: leg.from.lng,
+          endLat: leg.to.lat,
+          endLng: leg.to.lng,
+          altitude: arcAltitudeForKm(leg.km),
+          mode: group.mode,
+          animate: group.animate,
+          routeKey: group.key,
+        })),
+      ),
+    [routeGroups],
+  )
+
+  const legLabelData = useMemo<LegLabelDatum[]>(
+    () =>
+      routeGroups.flatMap((group) =>
+        group.legs.map((leg, i) => {
+          const mid = greatCircleMidpoint(leg.from.lat, leg.from.lng, leg.to.lat, leg.to.lng)
+          return {
+            __legLabel: true,
+            id: `leg-${group.key}-${leg.from.id}-${leg.to.id}-${i}`,
+            lat: mid.lat,
+            lng: mid.lng,
+            altitude: arcAltitudeForKm(leg.km) + 0.06,
+            text: formatDuration(leg.hours),
+            mode: group.mode,
+            routeKey: group.key,
+          }
+        }),
+      ),
+    [routeGroups],
+  )
 
   const markerElementsData = useMemo(
     () => [...pins, ...legLabelData],
     [pins, legLabelData],
   )
 
-  // Off by default (a static dashed line); the viewer can opt into an
-  // animated dash flowing from the first selected pin to the second.
-  const [animateRoute, setAnimateRoute] = useState(false)
-  // Off by default: clicking elsewhere on the map (empty space, another
-  // pin) clears the route as before. When on, the route/arc/label stays
-  // drawn - only the popup window itself closes - and clicking the arc or
-  // its label reopens the popup.
-  const [keepRoute, setKeepRoute] = useState(false)
-  const keepRouteRef = useRef(keepRoute)
-  keepRouteRef.current = keepRoute
-
-  const [routePopupOpen, setRoutePopupOpen] = useState(false)
-
+  // X button: always fully discards the live route, regardless of
+  // keepRoute - an explicit delete, never a freeze.
   const clearRoute = useCallback(() => {
     setRouteIds([])
     setTravelMode(null)
@@ -423,7 +562,19 @@ export default function MapTab() {
         anchor.appendChild(pill)
         anchor.addEventListener('click', (e) => {
           e.stopPropagation()
-          setRoutePopupOpen(true)
+          if (label.routeKey === 'live') {
+            setRoutePopupOpen(true)
+          } else {
+            reviveFrozenRoute(
+              label.routeKey,
+              frozenRoutesRef.current,
+              setFrozenRoutes,
+              setRouteIds,
+              setTravelMode,
+              setAnimateRoute,
+              setRoutePopupOpen,
+            )
+          }
         })
         return anchor
       }
@@ -453,12 +604,17 @@ export default function MapTab() {
           if (next.length >= 2) setRoutePopupOpen(true)
           return
         }
-        if (!keepRouteRef.current) {
-          setRouteIds([])
-          setTravelMode(null)
-          setAnimateRoute(false)
-        }
-        setRoutePopupOpen(false)
+        freezeOrClearRoute({
+          keepRoute: keepRouteRef.current,
+          travelMode: travelModeRef.current,
+          routeIds: routeIdsRef.current,
+          animateRoute: animateRouteRef.current,
+          setFrozenRoutes,
+          setRouteIds,
+          setTravelMode,
+          setAnimateRoute,
+          setRoutePopupOpen,
+        })
         setSelectedId(pin.id)
         setPending(null)
         flyTo(pin.lat, pin.lng)
@@ -482,6 +638,12 @@ export default function MapTab() {
   routeIdsRef.current = routeIds
   const pinsRef = useRef(pins)
   pinsRef.current = pins
+  const travelModeRef = useRef(travelMode)
+  travelModeRef.current = travelMode
+  const animateRouteRef = useRef(animateRoute)
+  animateRouteRef.current = animateRoute
+  const frozenRoutesRef = useRef(frozenRoutes)
+  frozenRoutesRef.current = frozenRoutes
 
   // Every DOM write here must be a no-op when nothing actually changed:
   // this function is also the MutationObserver's own callback below, so an
@@ -611,9 +773,24 @@ export default function MapTab() {
           arcStroke={0.15}
           arcDashLength={0.06}
           arcDashGap={0.045}
-          arcDashAnimateTime={animateRoute ? 3000 : 0}
+          arcDashAnimateTime={(d: object) => ((d as { animate: boolean }).animate ? 3000 : 0)}
           arcsTransitionDuration={300}
-          onArcClick={() => setRoutePopupOpen(true)}
+          onArcClick={(d: object) => {
+            const routeKey = (d as { routeKey: string }).routeKey
+            if (routeKey === 'live') {
+              setRoutePopupOpen(true)
+            } else {
+              reviveFrozenRoute(
+                routeKey,
+                frozenRoutes,
+                setFrozenRoutes,
+                setRouteIds,
+                setTravelMode,
+                setAnimateRoute,
+                setRoutePopupOpen,
+              )
+            }
+          }}
           htmlElementsData={markerElementsData}
           htmlLat={(d) => (d as Pin | LegLabelDatum).lat}
           htmlLng={(d) => (d as Pin | LegLabelDatum).lng}
@@ -631,12 +808,17 @@ export default function MapTab() {
             // reopens the popup.
             const hadSomethingOpen =
               pending !== null || selectedId !== null || routePopupOpen
-            if (!keepRoute) {
-              setRouteIds([])
-              setTravelMode(null)
-              setAnimateRoute(false)
-            }
-            setRoutePopupOpen(false)
+            freezeOrClearRoute({
+              keepRoute,
+              travelMode,
+              routeIds,
+              animateRoute,
+              setFrozenRoutes,
+              setRouteIds,
+              setTravelMode,
+              setAnimateRoute,
+              setRoutePopupOpen,
+            })
             setSelectedId(null)
             setPending(hadSomethingOpen ? null : { lat, lng })
           }}
@@ -854,12 +1036,17 @@ export default function MapTab() {
                                     key={p.id}
                                     className="pin-list-item"
                                     onClick={() => {
-                                      if (!keepRoute) {
-                                        setRouteIds([])
-                                        setTravelMode(null)
-                                        setAnimateRoute(false)
-                                      }
-                                      setRoutePopupOpen(false)
+                                      freezeOrClearRoute({
+                                        keepRoute,
+                                        travelMode,
+                                        routeIds,
+                                        animateRoute,
+                                        setFrozenRoutes,
+                                        setRouteIds,
+                                        setTravelMode,
+                                        setAnimateRoute,
+                                        setRoutePopupOpen,
+                                      })
                                       setSelectedId(p.id)
                                       flyTo(p.lat, p.lng)
                                     }}
