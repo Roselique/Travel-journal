@@ -32,6 +32,7 @@ export interface Activity {
   title: string
   notes: string
   date: string // ISO date, optional (empty string if unset)
+  price: string // free-form (e.g. "$40"), optional (empty string if unset)
   status: ActivityStatus
   createdAt: number
 }
@@ -136,13 +137,19 @@ export const useTravelStore = create<TravelState>()(
     }),
     {
       name: 'travel-journal-storage',
-      version: 1,
+      version: 2,
       migrate: (persisted) => {
-        const state = persisted as { pins?: Pin[] }
+        const state = persisted as { pins?: Pin[]; activities?: Activity[] }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
             ...p,
             kind: p.kind ?? 'destination',
+          }))
+        }
+        if (state.activities) {
+          state.activities = state.activities.map((a) => ({
+            ...a,
+            price: a.price ?? '',
           }))
         }
         return state

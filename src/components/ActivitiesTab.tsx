@@ -22,6 +22,7 @@ export default function ActivitiesTab() {
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState('')
+  const [price, setPrice] = useState('')
   const [status, setStatus] = useState<ActivityStatus>('idea')
 
   const selectedPin = pins.find((p) => p.id === selectedPinId) ?? null
@@ -92,11 +93,13 @@ export default function ActivitiesTab() {
                   title: title.trim(),
                   notes,
                   date,
+                  price: price.trim(),
                   status,
                 })
                 setTitle('')
                 setNotes('')
                 setDate('')
+                setPrice('')
                 setStatus('idea')
               }}
             >
@@ -106,11 +109,19 @@ export default function ActivitiesTab() {
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={120}
               />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
+              <div className="activity-form-row">
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+                <input
+                  placeholder="Price, e.g. $40"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  maxLength={20}
+                />
+              </div>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ActivityStatus)}
@@ -141,7 +152,11 @@ export default function ActivitiesTab() {
                   <div className="activity-main">
                     <div className="activity-title">{a.title}</div>
                     {a.notes && <div className="activity-notes">{a.notes}</div>}
-                    {a.date && <div className="activity-date">{a.date}</div>}
+                    {(a.date || a.price) && (
+                      <div className="activity-date">
+                        {[a.date, a.price].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
                   </div>
                   <div className="activity-controls">
                     <select
