@@ -694,7 +694,8 @@ h3 {
   gap: 0.7em;
 }
 
-.activity-form-row input {
+.activity-form-row input,
+.activity-form-row select {
   flex: 1;
   min-width: 0;
 }
@@ -707,6 +708,34 @@ h3 {
   flex-direction: column;
   gap: 0.6em;
   max-width: 640px;
+}
+
+.activity-group {
+  list-style: none;
+}
+
+.activity-group-header {
+  align-items: center;
+}
+
+.chevron-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-right: 0.3em;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.activity-sublist {
+  list-style: none;
+  margin: 0.6em 0 0;
+  padding: 0 0 0 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  border-left: 2px solid var(--border);
 }
 
 .activity-item {

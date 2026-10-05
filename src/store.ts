@@ -33,6 +33,7 @@ export interface Activity {
   notes: string
   date: string // ISO date, optional (empty string if unset)
   price: string // free-form (e.g. "$40"), optional (empty string if unset)
+  parentId: string // id of a grouping activity (e.g. "Museums"), empty if top-level
   status: ActivityStatus
   createdAt: number
 }
@@ -113,7 +114,9 @@ export const useTravelStore = create<TravelState>()(
       },
       deleteActivity: (id) => {
         set((state) => ({
-          activities: state.activities.filter((a) => a.id !== id),
+          activities: state.activities
+            .filter((a) => a.id !== id)
+            .map((a) => (a.parentId === id ? { ...a, parentId: '' } : a)),
         }))
       },
 
@@ -137,7 +140,7 @@ export const useTravelStore = create<TravelState>()(
     }),
     {
       name: 'travel-journal-storage',
-      version: 2,
+      version: 3,
       migrate: (persisted) => {
         const state = persisted as { pins?: Pin[]; activities?: Activity[] }
         if (state.pins) {
@@ -150,6 +153,7 @@ export const useTravelStore = create<TravelState>()(
           state.activities = state.activities.map((a) => ({
             ...a,
             price: a.price ?? '',
+            parentId: a.parentId ?? '',
           }))
         }
         return state
