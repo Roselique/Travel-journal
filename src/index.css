@@ -810,8 +810,8 @@ h3 {
 }
 
 .activity-card {
-  flex: 1 1 270px;
-  max-width: 340px;
+  flex: 1 1 400px;
+  max-width: 480px;
   padding: 0.7em 0.9em;
   background: var(--bg-panel);
   border: 1px solid var(--border);
