@@ -22,7 +22,15 @@ import {
   type RouteResult,
   type TravelMode,
 } from '../lib/travel'
-import { PIN_KIND_INFO, useTravelStore, type Pin, type PinKind } from '../store'
+import { fileToCompressedDataUrl } from '../lib/image'
+import {
+  PIN_KIND_INFO,
+  useTravelStore,
+  VISITED_WITH_LABEL,
+  type Pin,
+  type PinKind,
+  type VisitedWith,
+} from '../store'
 
 interface PendingPin {
   lat: number
@@ -164,6 +172,7 @@ const COUNTRY_LABEL_MIN_ALTITUDE = 0.8
 
 const PIN_KINDS: PinKind[] = ['destination', 'activity', 'visited']
 const TRAVEL_MODES: TravelMode[] = ['walking', 'train', 'airplane']
+const VISITED_WITH_OPTIONS: VisitedWith[] = ['', 'solo', 'friends', 'family']
 
 // Shape (dot/diamond/checkmark) and, for the checkmark, the text content
 // that distinguishes each pin kind's glyph inside the circle head.
@@ -228,12 +237,38 @@ function PinForm({
   initial?: Pin
   coords: { lat: number; lng: number }
   onCancel: () => void
-  onSave: (data: { name: string; notes: string; kind: PinKind }) => void
+  onSave: (data: {
+    name: string
+    notes: string
+    kind: PinKind
+    visitDate: string
+    visitedWith: VisitedWith
+    photos: string[]
+  }) => void
   onDelete?: () => void
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [kind, setKind] = useState<PinKind>(initial?.kind ?? 'destination')
+  const [visitDate, setVisitDate] = useState(initial?.visitDate ?? '')
+  const [visitedWith, setVisitedWith] = useState<VisitedWith>(
+    initial?.visitedWith ?? '',
+  )
+  const [photos, setPhotos] = useState<string[]>(initial?.photos ?? [])
+  const [photosLoading, setPhotosLoading] = useState(false)
+
+  const handlePhotoFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setPhotosLoading(true)
+    try {
+      const compressed = await Promise.all(
+        Array.from(files).map((f) => fileToCompressedDataUrl(f)),
+      )
+      setPhotos((prev) => [...prev, ...compressed])
+    } finally {
+      setPhotosLoading(false)
+    }
+  }
 
   return (
     <form
@@ -241,7 +276,7 @@ function PinForm({
       onSubmit={(e) => {
         e.preventDefault()
         if (!name.trim()) return
-        onSave({ name: name.trim(), notes, kind })
+        onSave({ name: name.trim(), notes, kind, visitDate, visitedWith, photos })
       }}
     >
       <div className="pin-form-coords">
@@ -281,6 +316,63 @@ function PinForm({
           </button>
         ))}
       </div>
+      {kind === 'visited' && (
+        <div className="visited-details">
+          <label>
+            When did you go?
+            <input
+              type="date"
+              value={visitDate}
+              onChange={(e) => setVisitDate(e.target.value)}
+            />
+          </label>
+          <label>
+            Who with?
+            <select
+              value={visitedWith}
+              onChange={(e) => setVisitedWith(e.target.value as VisitedWith)}
+            >
+              {VISITED_WITH_OPTIONS.map((w) => (
+                <option key={w} value={w}>
+                  {VISITED_WITH_LABEL[w]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Photos
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                handlePhotoFiles(e.target.files)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          {photosLoading && <p className="hint">Processing photo&hellip;</p>}
+          {photos.length > 0 && (
+            <div className="pin-photo-grid">
+              {photos.map((src, i) => (
+                <div key={i} className="pin-photo-thumb">
+                  <img src={src} alt="" />
+                  <button
+                    type="button"
+                    className="pin-photo-remove"
+                    aria-label="Remove photo"
+                    onClick={() =>
+                      setPhotos((prev) => prev.filter((_, idx) => idx !== i))
+                    }
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="pin-form-actions">
         <button type="submit" className="primary">
           {initial ? 'Save' : 'Drop pin'}
@@ -933,7 +1025,7 @@ export default function MapTab() {
               key="pending"
               coords={pending}
               onCancel={() => setPending(null)}
-              onSave={({ name, notes, kind }) => {
+              onSave={({ name, notes, kind, visitDate, visitedWith, photos }) => {
                 const id = addPin({
                   lat: pending.lat,
                   lng: pending.lng,
@@ -941,6 +1033,9 @@ export default function MapTab() {
                   notes,
                   kind,
                   color: PIN_KIND_INFO[kind].color,
+                  visitDate,
+                  visitedWith,
+                  photos,
                 })
                 setPending(null)
                 setSelectedId(id)
@@ -955,12 +1050,15 @@ export default function MapTab() {
               initial={selectedPin}
               coords={selectedPin}
               onCancel={() => setSelectedId(null)}
-              onSave={({ name, notes, kind }) => {
+              onSave={({ name, notes, kind, visitDate, visitedWith, photos }) => {
                 updatePin(selectedPin.id, {
                   name,
                   notes,
                   kind,
                   color: PIN_KIND_INFO[kind].color,
+                  visitDate,
+                  visitedWith,
+                  photos,
                 })
                 setSelectedId(null)
               }}

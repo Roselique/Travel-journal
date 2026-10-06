@@ -6,6 +6,15 @@ export type ActivityStatus = 'idea' | 'planned' | 'done'
 
 export type PinKind = 'destination' | 'activity' | 'visited'
 
+export type VisitedWith = '' | 'solo' | 'friends' | 'family'
+
+export const VISITED_WITH_LABEL: Record<VisitedWith, string> = {
+  '': 'Not set',
+  solo: 'Solo',
+  friends: 'Friends',
+  family: 'Family',
+}
+
 export const PIN_KIND_INFO: Record<
   PinKind,
   { label: string; color: string }
@@ -23,6 +32,11 @@ export interface Pin {
   notes: string
   kind: PinKind
   color: string
+  // Only meaningful for kind: 'visited', but kept on every pin so they
+  // survive a kind change and back without re-entering them.
+  visitDate: string // ISO date, empty if unset
+  visitedWith: VisitedWith
+  photos: string[] // compressed data URLs
   createdAt: number
 }
 
@@ -141,13 +155,16 @@ export const useTravelStore = create<TravelState>()(
     }),
     {
       name: 'travel-journal-storage',
-      version: 4,
+      version: 5,
       migrate: (persisted) => {
         const state = persisted as { pins?: Pin[]; activities?: Activity[] }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
             ...p,
             kind: p.kind ?? 'destination',
+            visitDate: p.visitDate ?? '',
+            visitedWith: p.visitedWith ?? '',
+            photos: p.photos ?? [],
           }))
         }
         if (state.activities) {
