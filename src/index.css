@@ -728,6 +728,7 @@ h3 {
 .activities-panel {
   flex: 1;
   min-width: 0;
+  max-width: 1400px;
   padding: 1.2em 1.5em;
   overflow-y: auto;
 }
@@ -810,8 +811,8 @@ h3 {
 }
 
 .activity-card {
-  flex: 1 1 400px;
-  max-width: 480px;
+  flex: 1 1 240px;
+  max-width: 300px;
   padding: 0.7em 0.9em;
   background: var(--bg-panel);
   border: 1px solid var(--border);
