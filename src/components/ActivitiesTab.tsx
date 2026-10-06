@@ -12,7 +12,9 @@ const STATUS_ORDER: ActivityStatus[] = ['planned', 'idea', 'done']
 // Shared row content for an ungrouped/grouped activity. `compact` switches
 // from the wide "content left, controls right" row (used for ungrouped
 // activities and category headers) to a narrow stacked card (used for
-// activities sitting side-by-side inside a category).
+// activities sitting side-by-side inside a category). Manages its own
+// edit-mode state/fields, seeded fresh from `activity` each time editing
+// starts, and calls onEdit with the saved patch.
 function ActivityRow({
   activity,
   compact,
@@ -20,6 +22,7 @@ function ActivityRow({
   onStatusChange,
   onParentChange,
   onDelete,
+  onEdit,
 }: {
   activity: Activity
   compact: boolean
@@ -27,7 +30,67 @@ function ActivityRow({
   onStatusChange: (status: ActivityStatus) => void
   onParentChange: (parentId: string) => void
   onDelete: () => void
+  onEdit: (patch: { title: string; notes: string; date: string; price: string }) => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(activity.title)
+  const [notes, setNotes] = useState(activity.notes)
+  const [date, setDate] = useState(activity.date)
+  const [price, setPrice] = useState(activity.price)
+
+  const startEdit = () => {
+    setTitle(activity.title)
+    setNotes(activity.notes)
+    setDate(activity.date)
+    setPrice(activity.price)
+    setEditing(true)
+  }
+
+  if (editing) {
+    return (
+      <form
+        className="activity-edit-fields"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!title.trim()) return
+          onEdit({ title: title.trim(), notes, date, price: price.trim() })
+          setEditing(false)
+        }}
+      >
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Activity title"
+          maxLength={120}
+        />
+        <div className="activity-form-row">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            placeholder="Price, e.g. $40"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            maxLength={20}
+          />
+        </div>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Notes (optional)"
+          rows={2}
+        />
+        <div className="activity-edit-actions">
+          <button type="submit" className="primary small">
+            Save
+          </button>
+          <button type="button" className="small" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    )
+  }
+
   return (
     <>
       <div className="activity-main">
@@ -63,11 +126,62 @@ function ActivityRow({
             ))}
           </select>
         )}
+        <button type="button" className="small" onClick={startEdit}>
+          Edit
+        </button>
         <button type="button" className="danger small" onClick={onDelete}>
           Delete
         </button>
       </div>
     </>
+  )
+}
+
+// Minimal title+notes edit toggle for a category header (no date/price/
+// status - those don't apply to a pure grouping header).
+function CategoryEditFields({
+  category,
+  onSave,
+  onCancel,
+}: {
+  category: Activity
+  onSave: (patch: { title: string; notes: string }) => void
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(category.title)
+  const [notes, setNotes] = useState(category.notes)
+
+  return (
+    <form
+      className="activity-edit-fields"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!title.trim()) return
+        onSave({ title: title.trim(), notes })
+      }}
+    >
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Category title"
+        maxLength={80}
+      />
+      <input
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Note (optional)"
+        maxLength={200}
+      />
+      <div className="activity-edit-actions">
+        <button type="submit" className="primary small">
+          Save
+        </button>
+        <button type="button" className="small" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   )
 }
 
@@ -95,6 +209,7 @@ export default function ActivitiesTab() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(),
   )
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
 
   const toggleGroup = (id: string) => {
     setCollapsedGroups((prev) => {
@@ -319,19 +434,39 @@ export default function ActivitiesTab() {
                         </span>
                       </button>
                     )}
-                    <div className="activity-main">
-                      <div className="activity-title">{cat.title}</div>
-                      {cat.notes && <div className="activity-notes">{cat.notes}</div>}
-                    </div>
-                    <div className="activity-controls">
-                      <button
-                        type="button"
-                        className="danger small"
-                        onClick={() => deleteActivity(cat.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {editingCategoryId === cat.id ? (
+                      <CategoryEditFields
+                        category={cat}
+                        onSave={(patch) => {
+                          updateActivity(cat.id, patch)
+                          setEditingCategoryId(null)
+                        }}
+                        onCancel={() => setEditingCategoryId(null)}
+                      />
+                    ) : (
+                      <>
+                        <div className="activity-main">
+                          <div className="activity-title">{cat.title}</div>
+                          {cat.notes && <div className="activity-notes">{cat.notes}</div>}
+                        </div>
+                        <div className="activity-controls">
+                          <button
+                            type="button"
+                            className="small"
+                            onClick={() => setEditingCategoryId(cat.id)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="danger small"
+                            onClick={() => deleteActivity(cat.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                   {children.length > 0 && !collapsed && (
                     <div className="activity-grid">
@@ -351,6 +486,7 @@ export default function ActivitiesTab() {
                               updateActivity(child.id, { parentId: p })
                             }
                             onDelete={() => deleteActivity(child.id)}
+                            onEdit={(patch) => updateActivity(child.id, patch)}
                           />
                         </div>
                       ))}
@@ -370,6 +506,7 @@ export default function ActivitiesTab() {
                     onStatusChange={(s) => updateActivity(a.id, { status: s })}
                     onParentChange={(p) => updateActivity(a.id, { parentId: p })}
                     onDelete={() => deleteActivity(a.id)}
+                    onEdit={(patch) => updateActivity(a.id, patch)}
                   />
                 </li>
               ))}

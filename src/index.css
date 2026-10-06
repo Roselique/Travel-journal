@@ -905,6 +905,19 @@ h3 {
   min-width: 0;
 }
 
+.activity-edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-edit-actions {
+  display: flex;
+  gap: 0.5em;
+}
+
 /* ---------- Wishlist tab ---------- */
 
 .wishlist-tab {
