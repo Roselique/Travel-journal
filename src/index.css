@@ -681,6 +681,24 @@ h3 {
   overflow-y: auto;
 }
 
+.category-form {
+  display: flex;
+  gap: 0.6em;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8em 1em;
+  max-width: 640px;
+  margin-bottom: 1em;
+}
+
+.category-form input {
+  flex: 1;
+  min-width: 140px;
+}
+
 .activity-form {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -696,8 +714,9 @@ h3 {
 
 .activity-form-row input,
 .activity-form-row select {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
+  max-width: 100%;
 }
 
 .activity-list {
@@ -710,11 +729,12 @@ h3 {
   max-width: 640px;
 }
 
-.activity-group {
-  list-style: none;
+.activity-category {
+  max-width: 640px;
+  margin-top: 1.2em;
 }
 
-.activity-group-header {
+.activity-category-header {
   align-items: center;
 }
 
@@ -728,14 +748,40 @@ h3 {
   flex-shrink: 0;
 }
 
-.activity-sublist {
-  list-style: none;
-  margin: 0.6em 0 0;
-  padding: 0 0 0 1.4em;
+/* Activities grouped under a category sit side by side, wrapping onto a
+   new row whenever one wouldn't fit - no JS measurement needed, just
+   flex-wrap with a minimum card width. */
+.activity-grid {
+  margin: 0.6em 0 0 1.6em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em;
+}
+
+.activity-card {
+  flex: 1 1 220px;
+  max-width: 280px;
+  padding: 0.7em 0.9em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-dim);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 0.6em;
-  border-left: 2px solid var(--border);
+  gap: 0.5em;
+}
+
+.activity-card.status-planned {
+  border-left-color: var(--accent);
+}
+
+.activity-card.status-done {
+  border-left-color: var(--accent-2);
+  opacity: 0.75;
+}
+
+.activity-card.status-idea {
+  border-left-color: #ffd43b;
 }
 
 .activity-item {
@@ -789,6 +835,22 @@ h3 {
 
 .activity-controls select {
   width: auto;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-controls.compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+}
+
+.activity-controls.compact select {
+  max-width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ---------- Wishlist tab ---------- */

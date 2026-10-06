@@ -9,20 +9,21 @@ const STATUS_LABEL: Record<ActivityStatus, string> = {
 
 const STATUS_ORDER: ActivityStatus[] = ['planned', 'idea', 'done']
 
-// Shared row content for both a top-level activity and a grouped child -
-// the wrapping element (a <li> or a <div>) differs by context, so this
-// only renders what goes inside it.
+// Shared row content for an ungrouped/grouped activity. `compact` switches
+// from the wide "content left, controls right" row (used for ungrouped
+// activities and category headers) to a narrow stacked card (used for
+// activities sitting side-by-side inside a category).
 function ActivityRow({
   activity,
-  canReparent,
-  parentOptions,
+  compact,
+  categoryOptions,
   onStatusChange,
   onParentChange,
   onDelete,
 }: {
   activity: Activity
-  canReparent: boolean
-  parentOptions: Activity[]
+  compact: boolean
+  categoryOptions: Activity[]
   onStatusChange: (status: ActivityStatus) => void
   onParentChange: (parentId: string) => void
   onDelete: () => void
@@ -38,7 +39,7 @@ function ActivityRow({
           </div>
         )}
       </div>
-      <div className="activity-controls">
+      <div className={compact ? 'activity-controls compact' : 'activity-controls'}>
         <select
           value={activity.status}
           onChange={(e) => onStatusChange(e.target.value as ActivityStatus)}
@@ -49,15 +50,15 @@ function ActivityRow({
             </option>
           ))}
         </select>
-        {canReparent && parentOptions.length > 0 && (
+        {categoryOptions.length > 0 && (
           <select
             value={activity.parentId}
             onChange={(e) => onParentChange(e.target.value)}
           >
-            <option value="">No group</option>
-            {parentOptions.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
+            <option value="">No category</option>
+            {categoryOptions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
               </option>
             ))}
           </select>
@@ -80,12 +81,17 @@ export default function ActivitiesTab() {
   const [selectedPinId, setSelectedPinId] = useState<string | null>(
     pins[0]?.id ?? null,
   )
+
+  const [categoryTitle, setCategoryTitle] = useState('')
+  const [categoryNotes, setCategoryNotes] = useState('')
+
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState('')
   const [price, setPrice] = useState('')
   const [parentId, setParentId] = useState('')
   const [status, setStatus] = useState<ActivityStatus>('idea')
+
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(),
   )
@@ -120,23 +126,26 @@ export default function ActivitiesTab() {
     [activities, selectedPinId],
   )
 
-  // Two levels only: a "top" activity (no parent, or a parent that isn't
-  // one of this pin's own activities) can have other activities grouped
-  // under it as children, e.g. "Museums" with "Van Gogh Museum" beneath.
+  // Categories are pure grouping headers (made via the category form);
+  // every other activity is either sitting under one (a child, shown
+  // side-by-side in that category's row) or ungrouped (shown in the plain
+  // stacked list below).
   const grouped = useMemo(() => {
-    const ids = new Set(pinActivities.map((a) => a.id))
-    const tops: Activity[] = []
-    const childrenByParent = new Map<string, Activity[]>()
+    const categories = pinActivities.filter((a) => a.isCategory)
+    const categoryIds = new Set(categories.map((c) => c.id))
+    const childrenByCategory = new Map<string, Activity[]>()
+    const ungrouped: Activity[] = []
     for (const a of pinActivities) {
-      if (a.parentId && ids.has(a.parentId)) {
-        const list = childrenByParent.get(a.parentId)
+      if (a.isCategory) continue
+      if (a.parentId && categoryIds.has(a.parentId)) {
+        const list = childrenByCategory.get(a.parentId)
         if (list) list.push(a)
-        else childrenByParent.set(a.parentId, [a])
+        else childrenByCategory.set(a.parentId, [a])
       } else {
-        tops.push(a)
+        ungrouped.push(a)
       }
     }
-    return { tops, childrenByParent }
+    return { categories, childrenByCategory, ungrouped }
   }, [pinActivities])
 
   const countFor = (pinId: string) =>
@@ -176,6 +185,41 @@ export default function ActivitiesTab() {
         {selectedPin && (
           <>
             <h2>{selectedPin.name}</h2>
+
+            <form
+              className="category-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!categoryTitle.trim()) return
+                addActivity({
+                  pinId: selectedPin.id,
+                  title: categoryTitle.trim(),
+                  notes: categoryNotes,
+                  date: '',
+                  price: '',
+                  parentId: '',
+                  isCategory: true,
+                  status: 'idea',
+                })
+                setCategoryTitle('')
+                setCategoryNotes('')
+              }}
+            >
+              <input
+                placeholder="New category, e.g. Museums"
+                value={categoryTitle}
+                onChange={(e) => setCategoryTitle(e.target.value)}
+                maxLength={80}
+              />
+              <input
+                placeholder="Note (optional)"
+                value={categoryNotes}
+                onChange={(e) => setCategoryNotes(e.target.value)}
+                maxLength={200}
+              />
+              <button type="submit">Add category</button>
+            </form>
+
             <form
               className="activity-form"
               onSubmit={(e) => {
@@ -188,6 +232,7 @@ export default function ActivitiesTab() {
                   date,
                   price: price.trim(),
                   parentId,
+                  isCategory: false,
                   status,
                 })
                 setTitle('')
@@ -232,10 +277,10 @@ export default function ActivitiesTab() {
                   value={parentId}
                   onChange={(e) => setParentId(e.target.value)}
                 >
-                  <option value="">No group (top-level)</option>
-                  {grouped.tops.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      Under &ldquo;{t.title}&rdquo;
+                  <option value="">No category</option>
+                  {grouped.categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
                     </option>
                   ))}
                 </select>
@@ -251,65 +296,83 @@ export default function ActivitiesTab() {
               </button>
             </form>
 
-            <ul className="activity-list">
-              {pinActivities.length === 0 && (
-                <li className="empty">No activities planned yet.</li>
-              )}
-              {grouped.tops.map((top) => {
-                const children = grouped.childrenByParent.get(top.id) ?? []
-                const collapsed = collapsedGroups.has(top.id)
-                const parentOptions = grouped.tops.filter((t) => t.id !== top.id)
-                return (
-                  <li key={top.id} className="activity-group">
-                    <div className={`activity-item status-${top.status} activity-group-header`}>
-                      {children.length > 0 && (
-                        <button
-                          type="button"
-                          className="chevron-btn"
-                          onClick={() => toggleGroup(top.id)}
-                          aria-expanded={!collapsed}
-                          aria-label={collapsed ? 'Expand group' : 'Collapse group'}
-                        >
-                          <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>
-                            ▾
-                          </span>
-                        </button>
-                      )}
-                      <ActivityRow
-                        activity={top}
-                        canReparent={children.length === 0}
-                        parentOptions={parentOptions}
-                        onStatusChange={(s) => updateActivity(top.id, { status: s })}
-                        onParentChange={(p) => updateActivity(top.id, { parentId: p })}
-                        onDelete={() => deleteActivity(top.id)}
-                      />
-                    </div>
-                    {children.length > 0 && !collapsed && (
-                      <ul className="activity-sublist">
-                        {children.map((child) => (
-                          <li
-                            key={child.id}
-                            className={`activity-item status-${child.status}`}
-                          >
-                            <ActivityRow
-                              activity={child}
-                              canReparent
-                              parentOptions={grouped.tops.filter((t) => t.id !== child.id)}
-                              onStatusChange={(s) =>
-                                updateActivity(child.id, { status: s })
-                              }
-                              onParentChange={(p) =>
-                                updateActivity(child.id, { parentId: p })
-                              }
-                              onDelete={() => deleteActivity(child.id)}
-                            />
-                          </li>
-                        ))}
-                      </ul>
+            {pinActivities.length === 0 && (
+              <p className="empty">No activities planned yet.</p>
+            )}
+
+            {grouped.categories.map((cat) => {
+              const children = grouped.childrenByCategory.get(cat.id) ?? []
+              const collapsed = collapsedGroups.has(cat.id)
+              return (
+                <div key={cat.id} className="activity-category">
+                  <div className="activity-item activity-category-header">
+                    {children.length > 0 && (
+                      <button
+                        type="button"
+                        className="chevron-btn"
+                        onClick={() => toggleGroup(cat.id)}
+                        aria-expanded={!collapsed}
+                        aria-label={collapsed ? 'Expand category' : 'Collapse category'}
+                      >
+                        <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>
+                          ▾
+                        </span>
+                      </button>
                     )}
-                  </li>
-                )
-              })}
+                    <div className="activity-main">
+                      <div className="activity-title">{cat.title}</div>
+                      {cat.notes && <div className="activity-notes">{cat.notes}</div>}
+                    </div>
+                    <div className="activity-controls">
+                      <button
+                        type="button"
+                        className="danger small"
+                        onClick={() => deleteActivity(cat.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {children.length > 0 && !collapsed && (
+                    <div className="activity-grid">
+                      {children.map((child) => (
+                        <div
+                          key={child.id}
+                          className={`activity-card status-${child.status}`}
+                        >
+                          <ActivityRow
+                            activity={child}
+                            compact
+                            categoryOptions={grouped.categories}
+                            onStatusChange={(s) =>
+                              updateActivity(child.id, { status: s })
+                            }
+                            onParentChange={(p) =>
+                              updateActivity(child.id, { parentId: p })
+                            }
+                            onDelete={() => deleteActivity(child.id)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            <ul className="activity-list">
+              {grouped.ungrouped.map((a) => (
+                <li key={a.id} className={`activity-item status-${a.status}`}>
+                  <ActivityRow
+                    activity={a}
+                    compact={false}
+                    categoryOptions={grouped.categories}
+                    onStatusChange={(s) => updateActivity(a.id, { status: s })}
+                    onParentChange={(p) => updateActivity(a.id, { parentId: p })}
+                    onDelete={() => deleteActivity(a.id)}
+                  />
+                </li>
+              ))}
             </ul>
           </>
         )}
