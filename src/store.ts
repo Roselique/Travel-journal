@@ -37,8 +37,6 @@ export interface Pin {
   visitDate: string // ISO date, empty if unset
   visitedWith: VisitedWith
   photos: string[] // compressed data URLs
-  stayName: string // accommodation reservation name, empty if unset
-  stayNotes: string // e.g. confirmation number, dates, address
   createdAt: number
 }
 
@@ -252,8 +250,6 @@ export const useTravelStore = create<TravelState>()(
             visitDate: p.visitDate ?? '',
             visitedWith: p.visitedWith ?? '',
             photos: p.photos ?? [],
-            stayName: p.stayName ?? '',
-            stayNotes: p.stayNotes ?? '',
           }))
         }
         if (state.activities) {

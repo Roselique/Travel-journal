@@ -1036,8 +1036,6 @@ export default function MapTab() {
                   visitDate,
                   visitedWith,
                   photos,
-                  stayName: '',
-                  stayNotes: '',
                 })
                 setPending(null)
                 setSelectedId(id)
