@@ -87,6 +87,73 @@ function JourneyMap({ stops }: { stops: { pin: Pin; days: number }[] }) {
 // making the grid absurdly long; anything outside that (or without a time)
 // goes in the "Anytime" section instead.
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6)
+const HOUR_PX = 60 // 1 minute of the day == 1px, so block geometry is just arithmetic on minutes
+const MIN_BLOCK_PX = 30 // floor height so a short/open-ended item is still a visible, clickable block
+const GRID_START_MIN = HOURS[0] * 60
+
+function parseMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+interface TimedBlock {
+  item: DayPlanItem
+  startMin: number
+  endMin: number
+  col: number
+  cols: number
+}
+
+// Lays out every timed item on a single shared timeline: items that don't
+// overlap in time each get the full width, items that do overlap split the
+// width into side-by-side columns (a classic calendar-grid packing) so two
+// things scheduled at once are both visible instead of hiding each other.
+function layoutTimedItems(items: DayPlanItem[]): TimedBlock[] {
+  const blocks = items
+    .filter((i) => i.time)
+    .map((item) => {
+      const startMin = parseMinutes(item.time)
+      const endMin = item.endTime
+        ? Math.max(parseMinutes(item.endTime), startMin + 15)
+        : startMin + 30
+      return { item, startMin, endMin }
+    })
+    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin)
+
+  // Split into clusters of mutually-overlapping blocks first, so a packed
+  // 9am meeting doesn't force an unrelated 6pm dinner into extra columns.
+  const clusters: (typeof blocks)[] = []
+  let current: typeof blocks = []
+  let clusterEnd = -Infinity
+  for (const b of blocks) {
+    if (current.length > 0 && b.startMin >= clusterEnd) {
+      clusters.push(current)
+      current = []
+      clusterEnd = -Infinity
+    }
+    current.push(b)
+    clusterEnd = Math.max(clusterEnd, b.endMin)
+  }
+  if (current.length > 0) clusters.push(current)
+
+  const result: TimedBlock[] = []
+  for (const cluster of clusters) {
+    const colEnds: number[] = []
+    const withCol = cluster.map((b) => {
+      let col = colEnds.findIndex((end) => end <= b.startMin)
+      if (col === -1) {
+        col = colEnds.length
+        colEnds.push(b.endMin)
+      } else {
+        colEnds[col] = b.endMin
+      }
+      return { ...b, col }
+    })
+    const cols = colEnds.length
+    for (const w of withCol) result.push({ ...w, cols })
+  }
+  return result
+}
 
 // All date-only strings here (YYYY-MM-DD) are treated as plain calendar
 // dates, not tied to any instant - parsed/built/formatted entirely in UTC
@@ -322,6 +389,42 @@ function ItemCard({
   )
 }
 
+// Compact version of ItemCard sized to sit inside an absolutely-positioned
+// timeline block, which may only be MIN_BLOCK_PX tall - overflow:hidden in
+// CSS lets the extra detail lines (location/price/notes) quietly clip
+// instead of bursting out of a short block.
+function TimelineBlockCard({
+  item,
+  onEdit,
+  onDelete,
+}: {
+  item: DayPlanItem
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="dayplan-block-card">
+      <div className="dayplan-block-actions">
+        <button type="button" className="small" onClick={onEdit}>
+          Edit
+        </button>
+        <button type="button" className="danger small" onClick={onDelete}>
+          Delete
+        </button>
+      </div>
+      <div className="dayplan-item-time">
+        {item.time}
+        {item.endTime && ` – ${item.endTime}`}
+      </div>
+      <div className="dayplan-title">{item.title}</div>
+      {item.category && <div className="dayplan-category">{item.category}</div>}
+      {item.location && <div className="dayplan-place">{item.location}</div>}
+      {item.price && <div className="dayplan-price">{item.price}</div>}
+      {item.notes && <div className="dayplan-notes">{item.notes}</div>}
+    </div>
+  )
+}
+
 function DaySchedule({
   items,
   onAdd,
@@ -338,22 +441,9 @@ function DaySchedule({
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const untimed = items.filter((i) => !i.time)
-  const hourOf = (t: string) => Number.parseInt(t.slice(0, 2), 10)
-  // An item's full card is placed once, in the hour slot it starts in.
-  const itemsInHour = (h: number) =>
-    items.filter((i) => i.time && hourOf(i.time) === h)
-  // Every later hour it runs through (up to its end time) gets a slim
-  // "continues" marker instead, so a long item like 8-11am doesn't look
-  // like it vanishes after its first hour.
-  const continuingInHour = (h: number) =>
-    items.filter((i) => {
-      if (!i.time || !i.endTime) return false
-      const startHour = hourOf(i.time)
-      const endHour = hourOf(i.endTime)
-      return endHour >= startHour && h > startHour && h <= endHour
-    })
+  const timedBlocks = useMemo(() => layoutTimedItems(items), [items])
 
-  const renderItem = (item: DayPlanItem) =>
+  const renderUntimed = (item: DayPlanItem) =>
     editingId === item.id ? (
       <ItemForm
         key={item.id}
@@ -378,7 +468,7 @@ function DaySchedule({
       <div className="dayplan-anytime">
         <div className="dayplan-hour-label">Anytime</div>
         <div className="dayplan-hour-slot">
-          {untimed.map(renderItem)}
+          {untimed.map(renderUntimed)}
           {addingAnytime ? (
             <ItemForm
               onSave={(data) => {
@@ -399,38 +489,87 @@ function DaySchedule({
         </div>
       </div>
 
-      <div className="dayplan-hours">
-        {HOURS.map((h) => (
-          <div key={h} className="dayplan-hour-row">
+      <div className="dayplan-hours" style={{ height: HOURS.length * HOUR_PX }}>
+        {HOURS.map((h, idx) => (
+          <div
+            key={h}
+            className="dayplan-hour-bgrow"
+            style={{ top: idx * HOUR_PX, height: HOUR_PX }}
+          >
             <div className="dayplan-hour-label">{formatHour(h)}</div>
-            <div className="dayplan-hour-slot">
-              {itemsInHour(h).map(renderItem)}
-              {continuingInHour(h).map((item) => (
-                <div key={item.id} className="dayplan-item-continued">
-                  {item.title} continues
-                </div>
-              ))}
-              {addingHour === h ? (
-                <ItemForm
-                  defaultTime={`${String(h).padStart(2, '0')}:00`}
-                  onSave={(data) => {
-                    onAdd(data)
-                    setAddingHour(null)
-                  }}
-                  onCancel={() => setAddingHour(null)}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="dayplan-add-slot"
-                  onClick={() => setAddingHour(h)}
-                >
-                  + add
-                </button>
-              )}
-            </div>
           </div>
         ))}
+
+        <div className="dayplan-hours-slotarea">
+          {HOURS.map((h, idx) =>
+            addingHour === h ? null : (
+              <button
+                key={h}
+                type="button"
+                className="dayplan-add-slot dayplan-add-slot-grid"
+                style={{ top: idx * HOUR_PX + 4 }}
+                onClick={() => setAddingHour(h)}
+              >
+                + add
+              </button>
+            ),
+          )}
+
+          {timedBlocks.map(({ item, startMin, endMin, col, cols }) => {
+            const editing = editingId === item.id
+            const top = startMin - GRID_START_MIN
+            const height = Math.max(endMin - startMin, MIN_BLOCK_PX)
+            const style = editing
+              ? { top, left: 0, width: '100%', zIndex: 3 }
+              : {
+                  top,
+                  height,
+                  left: `${(col / cols) * 100}%`,
+                  width: `calc(${100 / cols}% - 6px)`,
+                  zIndex: 2,
+                }
+            return (
+              <div
+                key={item.id}
+                className={`dayplan-block ${editing ? 'dayplan-block-adding' : ''}`}
+                style={style}
+              >
+                {editing ? (
+                  <ItemForm
+                    initial={item}
+                    onSave={(data) => {
+                      onUpdate(item.id, data)
+                      setEditingId(null)
+                    }}
+                    onCancel={() => setEditingId(null)}
+                  />
+                ) : (
+                  <TimelineBlockCard
+                    item={item}
+                    onEdit={() => setEditingId(item.id)}
+                    onDelete={() => onDelete(item.id)}
+                  />
+                )}
+              </div>
+            )
+          })}
+
+          {addingHour !== null && (
+            <div
+              className="dayplan-block dayplan-block-adding"
+              style={{ top: addingHour * 60 - GRID_START_MIN, left: 0, width: '100%', zIndex: 3 }}
+            >
+              <ItemForm
+                defaultTime={`${String(addingHour).padStart(2, '0')}:00`}
+                onSave={(data) => {
+                  onAdd(data)
+                  setAddingHour(null)
+                }}
+                onCancel={() => setAddingHour(null)}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
