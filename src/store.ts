@@ -55,21 +55,35 @@ export interface Activity {
 
 export interface DayPlanItem {
   id: string
+  tripId: string // which trip this item belongs to
   date: string // ISO date (YYYY-MM-DD) this item belongs to
   time: string // HH:MM 24h, optional (empty = untimed, sorts after timed items)
   endTime: string // HH:MM 24h, optional (empty = no set end time)
   title: string
   notes: string
-  pinId: string // linked location, empty string if none
+  location: string // free-form text (e.g. a neighborhood/district), empty if unset
   createdAt: number
+}
+
+export interface Trip {
+  id: string
+  name: string
+  destination: string // free-form, e.g. "Japan"
+  tripStart: string // ISO date, empty if unset
+  tripEnd: string // ISO date, empty if unset
+  createdAt: number
+}
+
+function dayLocationKey(tripId: string, date: string): string {
+  return `${tripId}::${date}`
 }
 
 interface TravelState {
   pins: Pin[]
   activities: Activity[]
+  trips: Trip[]
   dayPlanItems: DayPlanItem[]
-  tripStart: string // ISO date, empty if unset
-  tripEnd: string // ISO date, empty if unset
+  dayLocations: Record<string, string> // `${tripId}::${date}` -> pinId, the overall place for that day
 
   addPin: (pin: Omit<Pin, 'id' | 'createdAt'>) => string
   updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
@@ -79,12 +93,15 @@ interface TravelState {
   updateActivity: (id: string, patch: Partial<Omit<Activity, 'id'>>) => void
   deleteActivity: (id: string) => void
 
+  addTrip: (trip: Omit<Trip, 'id' | 'createdAt'>) => string
+  updateTrip: (id: string, patch: Partial<Omit<Trip, 'id'>>) => void
+  deleteTrip: (id: string) => void
+
   addDayPlanItem: (item: Omit<DayPlanItem, 'id' | 'createdAt'>) => string
   updateDayPlanItem: (id: string, patch: Partial<Omit<DayPlanItem, 'id'>>) => void
   deleteDayPlanItem: (id: string) => void
 
-  setTripStart: (date: string) => void
-  setTripEnd: (date: string) => void
+  setDayLocation: (tripId: string, date: string, pinId: string) => void
 }
 
 export const useTravelStore = create<TravelState>()(
@@ -92,9 +109,9 @@ export const useTravelStore = create<TravelState>()(
     (set) => ({
       pins: [],
       activities: [],
+      trips: [],
       dayPlanItems: [],
-      tripStart: '',
-      tripEnd: '',
+      dayLocations: {},
 
       addPin: (pin) => {
         const id = uuid()
@@ -112,8 +129,30 @@ export const useTravelStore = create<TravelState>()(
         set((state) => ({
           pins: state.pins.filter((p) => p.id !== id),
           activities: state.activities.filter((a) => a.pinId !== id),
-          dayPlanItems: state.dayPlanItems.map((d) =>
-            d.pinId === id ? { ...d, pinId: '' } : d,
+          dayLocations: Object.fromEntries(
+            Object.entries(state.dayLocations).filter(([, pinId]) => pinId !== id),
+          ),
+        }))
+      },
+
+      addTrip: (trip) => {
+        const id = uuid()
+        set((state) => ({
+          trips: [...state.trips, { ...trip, id, createdAt: Date.now() }],
+        }))
+        return id
+      },
+      updateTrip: (id, patch) => {
+        set((state) => ({
+          trips: state.trips.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        }))
+      },
+      deleteTrip: (id) => {
+        set((state) => ({
+          trips: state.trips.filter((t) => t.id !== id),
+          dayPlanItems: state.dayPlanItems.filter((d) => d.tripId !== id),
+          dayLocations: Object.fromEntries(
+            Object.entries(state.dayLocations).filter(([key]) => !key.startsWith(`${id}::`)),
           ),
         }))
       },
@@ -166,20 +205,29 @@ export const useTravelStore = create<TravelState>()(
         }))
       },
 
-      setTripStart: (date) => set({ tripStart: date }),
-      setTripEnd: (date) => set({ tripEnd: date }),
+      setDayLocation: (tripId, date, pinId) => {
+        set((state) => {
+          const dayLocations = { ...state.dayLocations }
+          const key = dayLocationKey(tripId, date)
+          if (pinId) dayLocations[key] = pinId
+          else delete dayLocations[key]
+          return { dayLocations }
+        })
+      },
     }),
     {
       name: 'travel-journal-storage',
-      version: 7,
+      version: 9,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
           activities?: Activity[]
           wishes?: unknown
-          dayPlanItems?: DayPlanItem[]
+          trips?: Trip[]
+          dayPlanItems?: (DayPlanItem & { pinId?: string; tripId?: string })[]
           tripStart?: string
           tripEnd?: string
+          dayLocations?: Record<string, string>
         }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
@@ -201,12 +249,50 @@ export const useTravelStore = create<TravelState>()(
         // The Speculations & Wishes tab was replaced by day planning -
         // drop its old data rather than carrying it forward unused.
         delete state.wishes
-        state.dayPlanItems = (state.dayPlanItems ?? []).map((d) => ({
-          ...d,
-          endTime: d.endTime ?? '',
-        }))
-        state.tripStart = state.tripStart ?? ''
-        state.tripEnd = state.tripEnd ?? ''
+
+        // Day planning used to be a single implicit trip (top-level
+        // tripStart/tripEnd + unscoped dayPlanItems/dayLocations). Fold
+        // that into a real Trip so existing schedules survive the move to
+        // multiple trips, rather than vanishing behind a tripId they never had.
+        const hadLegacyTrip =
+          !state.trips &&
+          ((state.dayPlanItems && state.dayPlanItems.length > 0) ||
+            state.tripStart ||
+            state.tripEnd)
+        const legacyTripId = uuid()
+
+        state.trips = state.trips ?? (hadLegacyTrip ? [{
+          id: legacyTripId,
+          name: 'My trip',
+          destination: '',
+          tripStart: state.tripStart ?? '',
+          tripEnd: state.tripEnd ?? '',
+          createdAt: Date.now(),
+        }] : [])
+
+        state.dayPlanItems = (state.dayPlanItems ?? []).map((d) => {
+          const { pinId: _pinId, ...rest } = d
+          return {
+            ...rest,
+            tripId: d.tripId ?? legacyTripId,
+            endTime: d.endTime ?? '',
+            location: d.location ?? '',
+          }
+        })
+
+        const oldDayLocations = state.dayLocations ?? {}
+        const alreadyScoped = Object.keys(oldDayLocations).some((k) => k.includes('::'))
+        state.dayLocations = alreadyScoped
+          ? oldDayLocations
+          : Object.fromEntries(
+              Object.entries(oldDayLocations).map(([date, pinId]) => [
+                dayLocationKey(legacyTripId, date),
+                pinId,
+              ]),
+            )
+
+        delete state.tripStart
+        delete state.tripEnd
         return state
       },
     },

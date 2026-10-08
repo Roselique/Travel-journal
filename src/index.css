@@ -970,6 +970,32 @@ h3 {
   margin: 0;
 }
 
+.dayplan-destination {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  margin-top: 0.15em;
+}
+
+.dayplan-back {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+  padding: 0 0 0.8em;
+}
+
+.dayplan-back:hover {
+  color: var(--text);
+}
+
+.dayplan-header-actions {
+  display: flex;
+  gap: 0.5em;
+  flex-shrink: 0;
+}
+
 .dayplan-range-fields {
   display: flex;
   gap: 0.7em;
@@ -1041,19 +1067,48 @@ h3 {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.8em;
-  padding: 0.7em 0.9em;
+  gap: 0.6em;
+  padding: 0.5em 0.6em 0.5em 0.9em;
   background: var(--bg-panel);
-  border: none;
-  border-radius: 0;
-  cursor: pointer;
-  font: inherit;
-  color: var(--text);
-  text-align: left;
 }
 
 .dayplan-day-row:hover {
   background: var(--bg-panel-2);
+}
+
+.dayplan-day-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  padding: 0.2em 0;
+}
+
+.dayplan-day-location-select {
+  flex-shrink: 0;
+  max-width: 140px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.35em 0.5em;
+  font-size: 0.8em;
+}
+
+.dayplan-day-chevron {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 0.3em;
 }
 
 .dayplan-day-num {
@@ -1191,6 +1246,129 @@ h3 {
   color: var(--text-dim);
   font-size: 0.9em;
   white-space: pre-wrap;
+}
+
+/* ---------- Trips landing ---------- */
+
+.trips-landing {
+  height: 100%;
+  overflow-y: auto;
+  padding: 1.2em 1.5em 3em;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.trips-landing-label {
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 0.2em;
+}
+
+.trips-landing h2 {
+  margin: 0 0 1.2em;
+}
+
+.trips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.9em;
+}
+
+.trip-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.trip-card-open {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  padding: 1em 1.1em 0.6em;
+}
+
+.trip-card-open:hover {
+  background: var(--bg-panel-2);
+}
+
+.trip-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+
+.trip-card-name {
+  font-size: 1.1em;
+  font-weight: 700;
+}
+
+.trip-badge {
+  flex-shrink: 0;
+  background: rgba(255, 150, 90, 0.15);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.2em 0.7em;
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trip-badge.upcoming {
+  background: var(--bg-panel-2);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+
+.trip-card-destination {
+  color: var(--text-dim);
+}
+
+.trip-card-meta {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.trip-card-actions {
+  display: flex;
+  gap: 0.4em;
+  padding: 0 1.1em 0.9em;
+}
+
+.trip-card-new {
+  align-items: center;
+  justify-content: center;
+  min-height: 130px;
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1em;
+}
+
+.trip-card-new:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.trip-form {
+  gap: 0.6em;
+  padding: 1em 1.1em;
 }
 
 /* ---------- Shared ---------- */
