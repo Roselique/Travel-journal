@@ -37,6 +37,8 @@ export interface Pin {
   visitDate: string // ISO date, empty if unset
   visitedWith: VisitedWith
   photos: string[] // compressed data URLs
+  stayName: string // accommodation reservation name, empty if unset
+  stayNotes: string // e.g. confirmation number, dates, address
   createdAt: number
 }
 
@@ -46,6 +48,8 @@ export interface Activity {
   title: string
   notes: string
   date: string // ISO date, optional (empty string if unset)
+  time: string // HH:MM 24h, optional (empty = untimed)
+  endTime: string // HH:MM 24h, optional (empty = no set end time)
   price: string // free-form (e.g. "$40"), optional (empty string if unset)
   parentId: string // id of a category activity (e.g. "Museums"), empty if ungrouped
   isCategory: boolean // a pure grouping header created via the category form
@@ -217,7 +221,7 @@ export const useTravelStore = create<TravelState>()(
     }),
     {
       name: 'travel-journal-storage',
-      version: 9,
+      version: 10,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
@@ -236,6 +240,8 @@ export const useTravelStore = create<TravelState>()(
             visitDate: p.visitDate ?? '',
             visitedWith: p.visitedWith ?? '',
             photos: p.photos ?? [],
+            stayName: p.stayName ?? '',
+            stayNotes: p.stayNotes ?? '',
           }))
         }
         if (state.activities) {
@@ -244,6 +250,8 @@ export const useTravelStore = create<TravelState>()(
             price: a.price ?? '',
             parentId: a.parentId ?? '',
             isCategory: a.isCategory ?? false,
+            time: a.time ?? '',
+            endTime: a.endTime ?? '',
           }))
         }
         // The Speculations & Wishes tab was replaced by day planning -

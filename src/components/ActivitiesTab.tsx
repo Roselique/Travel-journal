@@ -31,18 +31,29 @@ function ActivityRow({
   onStatusChange: (status: ActivityStatus) => void
   onParentChange: (parentId: string) => void
   onDelete: () => void
-  onEdit: (patch: { title: string; notes: string; date: string; price: string }) => void
+  onEdit: (patch: {
+    title: string
+    notes: string
+    date: string
+    time: string
+    endTime: string
+    price: string
+  }) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(activity.title)
   const [notes, setNotes] = useState(activity.notes)
   const [date, setDate] = useState(activity.date)
+  const [time, setTime] = useState(activity.time)
+  const [endTime, setEndTime] = useState(activity.endTime)
   const [price, setPrice] = useState(activity.price)
 
   const startEdit = () => {
     setTitle(activity.title)
     setNotes(activity.notes)
     setDate(activity.date)
+    setTime(activity.time)
+    setEndTime(activity.endTime)
     setPrice(activity.price)
     setEditing(true)
   }
@@ -54,7 +65,7 @@ function ActivityRow({
         onSubmit={(e) => {
           e.preventDefault()
           if (!title.trim()) return
-          onEdit({ title: title.trim(), notes, date, price: price.trim() })
+          onEdit({ title: title.trim(), notes, date, time, endTime, price: price.trim() })
           setEditing(false)
         }}
       >
@@ -74,6 +85,16 @@ function ActivityRow({
             maxLength={20}
           />
         </div>
+        <div className="activity-form-row">
+          <label className="dayplan-time-field">
+            Start
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </label>
+          <label className="dayplan-time-field">
+            End
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          </label>
+        </div>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -92,14 +113,18 @@ function ActivityRow({
     )
   }
 
+  const timeRange = activity.time
+    ? `${activity.time}${activity.endTime ? ` – ${activity.endTime}` : ''}`
+    : ''
+
   return (
     <>
       <div className="activity-main">
         <div className="activity-title">{activity.title}</div>
         {activity.notes && <div className="activity-notes">{activity.notes}</div>}
-        {(activity.date || activity.price) && (
+        {(activity.date || timeRange || activity.price) && (
           <div className="activity-date">
-            {[activity.date, activity.price].filter(Boolean).join(' · ')}
+            {[activity.date, timeRange, activity.price].filter(Boolean).join(' · ')}
           </div>
         )}
       </div>
@@ -192,6 +217,7 @@ export default function ActivitiesTab() {
   const addActivity = useTravelStore((s) => s.addActivity)
   const updateActivity = useTravelStore((s) => s.updateActivity)
   const deleteActivity = useTravelStore((s) => s.deleteActivity)
+  const updatePin = useTravelStore((s) => s.updatePin)
 
   const [selectedPinId, setSelectedPinId] = useState<string | null>(
     pins[0]?.id ?? null,
@@ -204,6 +230,8 @@ export default function ActivitiesTab() {
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [endTime, setEndTime] = useState('')
   const [price, setPrice] = useState('')
   const [parentId, setParentId] = useState('')
   const [status, setStatus] = useState<ActivityStatus>('idea')
@@ -212,6 +240,10 @@ export default function ActivitiesTab() {
     () => new Set(),
   )
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<string>('')
+  const [addingStay, setAddingStay] = useState(false)
+  const [stayName, setStayName] = useState('')
+  const [stayNotes, setStayNotes] = useState('')
 
   const toggleGroup = (id: string) => {
     setCollapsedGroups((prev) => {
@@ -229,6 +261,11 @@ export default function ActivitiesTab() {
       setSelectedPinId(pins[0].id)
     }
   }, [selectedPin, pins])
+
+  useEffect(() => {
+    setCategoryFilter('')
+    setAddingStay(false)
+  }, [selectedPinId])
 
   const pinActivities = useMemo(
     () =>
@@ -337,6 +374,138 @@ export default function ActivitiesTab() {
           <>
             <h2>{selectedPin.name}</h2>
 
+            <div className="stay-section">
+              <div className="section-label">Stay</div>
+              {addingStay ? (
+                <form
+                  className="stay-form"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    if (!stayName.trim()) return
+                    updatePin(selectedPin.id, { stayName: stayName.trim(), stayNotes })
+                    setAddingStay(false)
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={stayName}
+                    onChange={(e) => setStayName(e.target.value)}
+                    placeholder="Hotel / reservation name"
+                    maxLength={120}
+                  />
+                  <input
+                    value={stayNotes}
+                    onChange={(e) => setStayNotes(e.target.value)}
+                    placeholder="Dates, confirmation #, address... (optional)"
+                    maxLength={200}
+                  />
+                  <div className="activity-edit-actions">
+                    <button type="submit" className="primary small">
+                      Save
+                    </button>
+                    <button type="button" className="small" onClick={() => setAddingStay(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : selectedPin.stayName ? (
+                <div className="stay-card">
+                  <div className="activity-main">
+                    <div className="activity-title">{selectedPin.stayName}</div>
+                    {selectedPin.stayNotes && (
+                      <div className="activity-notes">{selectedPin.stayNotes}</div>
+                    )}
+                  </div>
+                  <div className="activity-controls">
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={() => {
+                        setStayName(selectedPin.stayName)
+                        setStayNotes(selectedPin.stayNotes)
+                        setAddingStay(true)
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="danger small"
+                      onClick={() => updatePin(selectedPin.id, { stayName: '', stayNotes: '' })}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="dayplan-add-slot stay-add"
+                  onClick={() => {
+                    setStayName('')
+                    setStayNotes('')
+                    setAddingStay(true)
+                  }}
+                >
+                  + add accommodation reservation
+                </button>
+              )}
+              <a
+                className="stay-search-link"
+                href={`https://www.google.com/search?q=${encodeURIComponent(
+                  `hotels in ${selectedPin.name}`,
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Search hotels in {selectedPin.name} →
+              </a>
+            </div>
+
+            <div className="places-overview">
+              <div className="places-overview-top">
+                <div className="section-label">Places in {selectedPin.name}</div>
+                <div className="places-overview-stats">
+                  {pinActivities.filter((a) => !a.isCategory).length} saved
+                </div>
+              </div>
+              <div className="category-pills">
+                <button
+                  type="button"
+                  className={`category-pill ${categoryFilter === '' ? 'active' : ''}`}
+                  onClick={() => setCategoryFilter('')}
+                >
+                  All
+                  <span className="pill-count">
+                    {pinActivities.filter((a) => !a.isCategory).length}
+                  </span>
+                </button>
+                {grouped.categories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`category-pill ${categoryFilter === c.id ? 'active' : ''}`}
+                    onClick={() => setCategoryFilter(c.id)}
+                  >
+                    {c.title}
+                    <span className="pill-count">
+                      {(grouped.childrenByCategory.get(c.id) ?? []).length}
+                    </span>
+                  </button>
+                ))}
+                {grouped.ungrouped.length > 0 && (
+                  <button
+                    type="button"
+                    className={`category-pill ${categoryFilter === '__ungrouped__' ? 'active' : ''}`}
+                    onClick={() => setCategoryFilter('__ungrouped__')}
+                  >
+                    Other
+                    <span className="pill-count">{grouped.ungrouped.length}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             <form
               className="category-form"
               onSubmit={(e) => {
@@ -347,6 +516,8 @@ export default function ActivitiesTab() {
                   title: categoryTitle.trim(),
                   notes: categoryNotes,
                   date: '',
+                  time: '',
+                  endTime: '',
                   price: '',
                   parentId: '',
                   isCategory: true,
@@ -381,6 +552,8 @@ export default function ActivitiesTab() {
                   title: title.trim(),
                   notes,
                   date,
+                  time,
+                  endTime,
                   price: price.trim(),
                   parentId,
                   isCategory: false,
@@ -389,6 +562,8 @@ export default function ActivitiesTab() {
                 setTitle('')
                 setNotes('')
                 setDate('')
+                setTime('')
+                setEndTime('')
                 setPrice('')
                 setParentId('')
                 setStatus('idea')
@@ -412,6 +587,20 @@ export default function ActivitiesTab() {
                   onChange={(e) => setPrice(e.target.value)}
                   maxLength={20}
                 />
+              </div>
+              <div className="activity-form-row">
+                <label className="dayplan-time-field">
+                  Start
+                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+                </label>
+                <label className="dayplan-time-field">
+                  End
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                  />
+                </label>
               </div>
               <div className="activity-form-row">
                 <select
@@ -451,7 +640,9 @@ export default function ActivitiesTab() {
               <p className="empty">No activities planned yet.</p>
             )}
 
-            {grouped.categories.map((cat) => {
+            {grouped.categories
+              .filter((cat) => categoryFilter === '' || categoryFilter === cat.id)
+              .map((cat) => {
               const children = grouped.childrenByCategory.get(cat.id) ?? []
               const collapsed = collapsedGroups.has(cat.id)
               return (
@@ -533,7 +724,8 @@ export default function ActivitiesTab() {
             })}
 
             <ul className="activity-list">
-              {grouped.ungrouped.map((a) => (
+              {(categoryFilter === '' || categoryFilter === '__ungrouped__') &&
+                grouped.ungrouped.map((a) => (
                 <li key={a.id} className={`activity-item status-${a.status}`}>
                   <ActivityRow
                     activity={a}

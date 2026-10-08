@@ -747,6 +747,112 @@ h3 {
   overflow-y: auto;
 }
 
+.section-label {
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.stay-section {
+  max-width: 640px;
+  margin-bottom: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.stay-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8em 1em;
+}
+
+.stay-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8em 1em;
+}
+
+.stay-add {
+  width: 100%;
+  text-align: center;
+  padding: 0.7em;
+}
+
+.stay-search-link {
+  color: var(--accent);
+  font-size: 0.88em;
+  text-decoration: none;
+}
+
+.stay-search-link:hover {
+  text-decoration: underline;
+}
+
+.places-overview {
+  max-width: 640px;
+  margin-bottom: 1.2em;
+}
+
+.places-overview-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.6em;
+}
+
+.places-overview-stats {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.category-pills {
+  display: flex;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.category-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 0.4em 0.9em;
+  font-size: 0.85em;
+  cursor: pointer;
+  font: inherit;
+}
+
+.category-pill:hover {
+  color: var(--text);
+}
+
+.category-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06111d;
+  font-weight: 600;
+}
+
+.pill-count {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 .category-form {
   display: flex;
   gap: 0.6em;
