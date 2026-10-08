@@ -339,10 +339,19 @@ function DaySchedule({
 
   const untimed = items.filter((i) => !i.time)
   const hourOf = (t: string) => Number.parseInt(t.slice(0, 2), 10)
-  // An item is placed in the hour slot it starts in - a 6:00-8:30 item
-  // shows once, in the 6 AM row, with its end time in the card.
+  // An item's full card is placed once, in the hour slot it starts in.
   const itemsInHour = (h: number) =>
     items.filter((i) => i.time && hourOf(i.time) === h)
+  // Every later hour it runs through (up to its end time) gets a slim
+  // "continues" marker instead, so a long item like 8-11am doesn't look
+  // like it vanishes after its first hour.
+  const continuingInHour = (h: number) =>
+    items.filter((i) => {
+      if (!i.time || !i.endTime) return false
+      const startHour = hourOf(i.time)
+      const endHour = hourOf(i.endTime)
+      return endHour >= startHour && h > startHour && h <= endHour
+    })
 
   const renderItem = (item: DayPlanItem) =>
     editingId === item.id ? (
@@ -396,6 +405,11 @@ function DaySchedule({
             <div className="dayplan-hour-label">{formatHour(h)}</div>
             <div className="dayplan-hour-slot">
               {itemsInHour(h).map(renderItem)}
+              {continuingInHour(h).map((item) => (
+                <div key={item.id} className="dayplan-item-continued">
+                  {item.title} continues
+                </div>
+              ))}
               {addingHour === h ? (
                 <ItemForm
                   defaultTime={`${String(h).padStart(2, '0')}:00`}

@@ -1457,6 +1457,14 @@ h3 {
   padding: 0.5em 0.7em;
 }
 
+.dayplan-item-continued {
+  border-left: 3px dashed var(--accent);
+  padding: 0.25em 0.7em;
+  color: var(--text-dim);
+  font-size: 0.8em;
+  font-style: italic;
+}
+
 .dayplan-item-form {
   display: flex;
   flex-direction: column;
