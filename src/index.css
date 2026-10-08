@@ -935,109 +935,225 @@ h3 {
 /* ---------- Day Planning tab ---------- */
 
 .dayplan-tab {
-  display: flex;
   height: 100%;
-}
-
-.dayplan-sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
-  padding: 1em;
   overflow-y: auto;
+  padding: 1.2em 1.5em 3em;
 }
 
-.dayplan-sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3em;
-}
-
-.dayplan-date-picker {
-  margin-bottom: 0.8em;
-}
-
-.dayplan-day-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  padding: 0.5em 0.6em;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.dayplan-day-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dayplan-day-item:hover {
-  background: var(--bg-panel-2);
-}
-
-.dayplan-day-item.active {
-  background: var(--bg-panel-2);
-  border: 1px solid var(--accent);
-}
-
-.dayplan-panel {
-  flex: 1;
-  min-width: 0;
-  max-width: 1400px;
-  padding: 1.2em 1.5em;
-  overflow-y: auto;
-}
-
-.dayplan-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7em;
+.dayplan-header {
+  max-width: 900px;
+  margin: 0 auto 1.5em;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1em;
-  max-width: 520px;
-  margin-bottom: 1.2em;
+  border-radius: 14px;
+  padding: 1.2em 1.4em;
 }
 
-.dayplan-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6em;
-  max-width: 680px;
-}
-
-.dayplan-item {
+.dayplan-header-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1em;
-  padding: 0.8em 1em;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
-  border-radius: 8px;
+  flex-wrap: wrap;
 }
 
-.dayplan-main {
-  display: flex;
-  gap: 0.8em;
+.dayplan-header-range {
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 0.2em;
 }
 
-.dayplan-time {
+.dayplan-header-top h2 {
+  margin: 0;
+}
+
+.dayplan-jump {
   flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
+}
+
+.dayplan-stats {
+  display: flex;
+  gap: 0.6em;
+  margin-top: 1.1em;
+  flex-wrap: wrap;
+}
+
+.dayplan-stat {
+  flex: 1;
+  min-width: 90px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6em 0.8em;
+  display: flex;
+  flex-direction: column;
+}
+
+.dayplan-stat strong {
+  font-size: 1.4em;
+  line-height: 1.1;
+}
+
+.dayplan-stat span {
+  color: var(--text-dim);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dayplan-daylist {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.dayplan-daylist h3 {
+  margin-bottom: 0.7em;
+}
+
+.dayplan-day-block {
+  margin-bottom: 0.7em;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dayplan-day-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.7em 0.9em;
+  background: var(--bg-panel);
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+}
+
+.dayplan-day-row:hover {
+  background: var(--bg-panel-2);
+}
+
+.dayplan-day-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.dayplan-day-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dayplan-day-date {
   font-weight: 600;
+}
+
+.dayplan-day-summary {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.dayplan-schedule {
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  padding: 0.8em 1em 1.2em;
+}
+
+.dayplan-anytime {
+  display: flex;
+  gap: 1em;
+  padding-bottom: 0.8em;
+  margin-bottom: 0.4em;
+  border-bottom: 1px dashed var(--border);
+}
+
+.dayplan-hours {
+  display: flex;
+  flex-direction: column;
+}
+
+.dayplan-hour-row {
+  display: flex;
+  gap: 1em;
+  padding: 0.6em 0;
+  border-top: 1px solid var(--border);
+}
+
+.dayplan-hour-label {
+  flex-shrink: 0;
+  width: 64px;
+  color: var(--text-dim);
+  font-size: 0.82em;
+  padding-top: 0.3em;
+}
+
+.dayplan-hour-slot {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.dayplan-add-slot {
+  align-self: flex-start;
+  background: none;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 0.3em 0.7em;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.dayplan-add-slot:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.dayplan-item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8em;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.5em 0.7em;
+}
+
+.dayplan-item-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6em 0.7em;
+  max-width: 420px;
+}
+
+.dayplan-item-actions {
+  display: flex;
+  gap: 0.4em;
+  flex-shrink: 0;
 }
 
 .dayplan-title {
@@ -1058,12 +1174,6 @@ h3 {
   color: var(--text-dim);
   font-size: 0.9em;
   white-space: pre-wrap;
-}
-
-.dayplan-controls {
-  display: flex;
-  gap: 0.4em;
-  flex-shrink: 0;
 }
 
 /* ---------- Shared ---------- */
