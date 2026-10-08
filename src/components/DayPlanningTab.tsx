@@ -53,10 +53,10 @@ function JourneyMap({ stops }: { stops: { pin: Pin; days: number }[] }) {
         {points.map((p, i) => (
           <g key={p.pin.id}>
             <foreignObject
-              x={p.px.x - 60}
-              y={p.px.y - 46}
-              width={120}
-              height={34}
+              x={p.px.x - 75}
+              y={p.px.y - 64}
+              width={150}
+              height={52}
             >
               <div className="journey-pin-label">
                 <span className="journey-pin-name">{p.pin.name}</span>
