@@ -66,8 +66,20 @@ export interface DayPlanItem {
   title: string
   notes: string
   location: string // free-form text (e.g. a neighborhood/district), empty if unset
+  category: string // one of DAY_ITEM_CATEGORIES, empty if unset
+  price: string // free-form (e.g. "$40"), empty if unset
   createdAt: number
 }
+
+export const DAY_ITEM_CATEGORIES = [
+  'Sights',
+  'Restaurants',
+  'Coffee',
+  'Bars',
+  'Spas',
+  'Activities',
+  'Photo Spots',
+] as const
 
 export interface Trip {
   id: string
@@ -221,7 +233,7 @@ export const useTravelStore = create<TravelState>()(
     }),
     {
       name: 'travel-journal-storage',
-      version: 10,
+      version: 11,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
@@ -285,6 +297,8 @@ export const useTravelStore = create<TravelState>()(
             tripId: d.tripId ?? legacyTripId,
             endTime: d.endTime ?? '',
             location: d.location ?? '',
+            category: d.category ?? '',
+            price: d.price ?? '',
           }
         })
 

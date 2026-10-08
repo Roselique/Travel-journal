@@ -1460,12 +1460,40 @@ h3 {
 .dayplan-item-form {
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
+  gap: 0.4em;
   background: var(--bg-panel-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.6em 0.7em;
-  max-width: 420px;
+  border-radius: 10px;
+  padding: 0.9em 1em;
+  max-width: 460px;
+}
+
+.dayplan-item-form .section-label {
+  margin-top: 0.5em;
+}
+
+.dayplan-item-form .section-label:first-child {
+  margin-top: 0;
+}
+
+.dayplan-item-submit {
+  width: 100%;
+  margin-top: 0.6em;
+  padding: 0.7em;
+  font-size: 1em;
+}
+
+.dayplan-item-cancel {
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+}
+
+.dayplan-item-cancel:hover {
+  color: var(--text);
+  border-color: transparent;
 }
 
 .dayplan-item-actions {
@@ -1478,10 +1506,26 @@ h3 {
   font-weight: 600;
 }
 
+.dayplan-category {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 0.2em;
+}
+
 .dayplan-place {
   display: flex;
   align-items: center;
   gap: 0.4em;
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin-top: 0.2em;
+}
+
+.dayplan-price {
   color: var(--text-dim);
   font-size: 0.85em;
   margin-top: 0.2em;

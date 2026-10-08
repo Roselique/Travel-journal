@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useTravelStore, type Activity, type DayPlanItem, type Pin, type Trip } from '../store'
+import {
+  DAY_ITEM_CATEGORIES,
+  useTravelStore,
+  type Activity,
+  type DayPlanItem,
+  type Pin,
+  type Trip,
+} from '../store'
 import { esriExportImageUrl, fitMercatorBBox, projectToPixel } from '../lib/mercator'
 
 const JOURNEY_MAP_WIDTH = 900
@@ -167,6 +174,8 @@ type ItemDraft = {
   title: string
   notes: string
   location: string
+  category: string
+  price: string
 }
 
 function ItemForm({
@@ -183,6 +192,8 @@ function ItemForm({
   const [title, setTitle] = useState(initial?.title ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [location, setLocation] = useState(initial?.location ?? '')
+  const [category, setCategory] = useState(initial?.category ?? '')
+  const [price, setPrice] = useState(initial?.price ?? '')
   const [time, setTime] = useState(initial?.time ?? defaultTime ?? '')
   const [endTime, setEndTime] = useState(initial?.endTime ?? '')
 
@@ -192,9 +203,40 @@ function ItemForm({
       onSubmit={(e) => {
         e.preventDefault()
         if (!title.trim()) return
-        onSave({ time, endTime, title: title.trim(), notes, location: location.trim() })
+        onSave({
+          time,
+          endTime,
+          title: title.trim(),
+          notes,
+          location: location.trim(),
+          category,
+          price: price.trim(),
+        })
       }}
     >
+      <div className="section-label">Name</div>
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="e.g. Fushimi Inari hike"
+        maxLength={120}
+      />
+
+      <div className="section-label">Category</div>
+      <div className="category-pills">
+        {DAY_ITEM_CATEGORIES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={`category-pill ${category === c ? 'active' : ''}`}
+            onClick={() => setCategory((prev) => (prev === c ? '' : c))}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
       <div className="activity-form-row">
         <label className="dayplan-time-field">
           Start
@@ -209,33 +251,37 @@ function ItemForm({
           />
         </label>
       </div>
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="What's planned?"
-        maxLength={120}
-      />
+
+      <div className="section-label">Location (optional)</div>
       <input
         value={location}
         onChange={(e) => setLocation(e.target.value)}
-        placeholder="Location (e.g. a neighborhood or district)"
+        placeholder="e.g. a neighborhood or district"
         maxLength={120}
       />
+
+      <div className="section-label">Price (optional)</div>
+      <input
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+        placeholder="e.g. $40"
+        maxLength={20}
+      />
+
+      <div className="section-label">Note (optional)</div>
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes (optional)"
+        placeholder="Any details worth remembering"
         rows={2}
       />
-      <div className="activity-edit-actions">
-        <button type="submit" className="primary small">
-          Save
-        </button>
-        <button type="button" className="small" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
+
+      <button type="submit" className="primary dayplan-item-submit">
+        {initial ? 'Save changes' : 'Add to day'}
+      </button>
+      <button type="button" className="small dayplan-item-cancel" onClick={onCancel}>
+        Cancel
+      </button>
     </form>
   )
 }
@@ -259,7 +305,9 @@ function ItemCard({
           </div>
         )}
         <div className="dayplan-title">{item.title}</div>
+        {item.category && <div className="dayplan-category">{item.category}</div>}
         {item.location && <div className="dayplan-place">{item.location}</div>}
+        {item.price && <div className="dayplan-price">{item.price}</div>}
         {item.notes && <div className="dayplan-notes">{item.notes}</div>}
       </div>
       <div className="dayplan-item-actions">
