@@ -568,8 +568,7 @@ h3 {
 }
 
 .pin-form,
-.activity-form,
-.wish-form {
+.activity-form {
   display: flex;
   flex-direction: column;
   gap: 0.7em;
@@ -933,55 +932,119 @@ h3 {
   gap: 0.5em;
 }
 
-/* ---------- Wishlist tab ---------- */
+/* ---------- Day Planning tab ---------- */
 
-.wishlist-tab {
+.dayplan-tab {
   display: flex;
   height: 100%;
-  overflow: hidden;
 }
 
-.wishlist-form-panel {
-  width: 360px;
+.dayplan-sidebar {
+  width: 280px;
   flex-shrink: 0;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
-  padding: 1.2em;
+  padding: 1em;
   overflow-y: auto;
 }
 
-.wishlist-items {
-  flex: 1;
-  padding: 1.2em 1.5em;
-  overflow-y: auto;
-}
-
-.wishlist-items ul {
+.dayplan-sidebar ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.7em;
-  max-width: 680px;
+  gap: 0.3em;
 }
 
-.wish-item {
+.dayplan-date-picker {
+  margin-bottom: 0.8em;
+}
+
+.dayplan-day-item {
   display: flex;
-  justify-content: space-between;
-  gap: 1em;
-  padding: 0.9em 1.1em;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 0.6em;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dayplan-day-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dayplan-day-item:hover {
+  background: var(--bg-panel-2);
+}
+
+.dayplan-day-item.active {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--accent);
+}
+
+.dayplan-panel {
+  flex: 1;
+  min-width: 0;
+  max-width: 1400px;
+  padding: 1.2em 1.5em;
+  overflow-y: auto;
+}
+
+.dayplan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
+  padding: 1em;
+  max-width: 520px;
+  margin-bottom: 1.2em;
 }
 
-.wish-title {
+.dayplan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  max-width: 680px;
+}
+
+.dayplan-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1em;
+  padding: 0.8em 1em;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+}
+
+.dayplan-main {
+  display: flex;
+  gap: 0.8em;
+}
+
+.dayplan-time {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
   font-weight: 600;
-  font-size: 1.05em;
 }
 
-.wish-place {
+.dayplan-title {
+  font-weight: 600;
+}
+
+.dayplan-place {
   display: flex;
   align-items: center;
   gap: 0.4em;
@@ -990,29 +1053,16 @@ h3 {
   margin-top: 0.2em;
 }
 
-.wish-notes {
-  margin-top: 0.4em;
+.dayplan-notes {
+  margin-top: 0.3em;
   color: var(--text-dim);
+  font-size: 0.9em;
   white-space: pre-wrap;
 }
 
-.wish-tags {
-  margin-top: 0.5em;
+.dayplan-controls {
   display: flex;
   gap: 0.4em;
-  flex-wrap: wrap;
-}
-
-.tag {
-  background: var(--bg-panel-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.15em 0.7em;
-  font-size: 0.78em;
-  color: var(--text-dim);
-}
-
-.wish-controls {
   flex-shrink: 0;
 }
 

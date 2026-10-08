@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import MapTab from './components/MapTab'
 import ActivitiesTab from './components/ActivitiesTab'
-import WishlistTab from './components/WishlistTab'
+import DayPlanningTab from './components/DayPlanningTab'
 
-type Tab = 'map' | 'activities' | 'wishlist'
+type Tab = 'map' | 'activities' | 'dayplan'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'map', label: '🌍 Map' },
   { id: 'activities', label: '🗓️ Activities' },
-  { id: 'wishlist', label: '✨ Speculations & Wishes' },
+  { id: 'dayplan', label: '📅 Day Planning' },
 ]
 
 function App() {
@@ -34,7 +34,7 @@ function App() {
       <main className="app-main">
         {tab === 'map' && <MapTab />}
         {tab === 'activities' && <ActivitiesTab />}
-        {tab === 'wishlist' && <WishlistTab />}
+        {tab === 'dayplan' && <DayPlanningTab />}
       </main>
     </div>
   )

@@ -53,20 +53,20 @@ export interface Activity {
   createdAt: number
 }
 
-export interface WishItem {
+export interface DayPlanItem {
   id: string
+  date: string // ISO date (YYYY-MM-DD) this item belongs to
+  time: string // HH:MM 24h, optional (empty = untimed, sorts after timed items)
   title: string
   notes: string
-  pinId: string // linked pin id, empty string if none
-  placeName: string // freeform place name when not linked to a pin
-  tags: string
+  pinId: string // linked location, empty string if none
   createdAt: number
 }
 
 interface TravelState {
   pins: Pin[]
   activities: Activity[]
-  wishes: WishItem[]
+  dayPlanItems: DayPlanItem[]
 
   addPin: (pin: Omit<Pin, 'id' | 'createdAt'>) => string
   updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
@@ -76,9 +76,9 @@ interface TravelState {
   updateActivity: (id: string, patch: Partial<Omit<Activity, 'id'>>) => void
   deleteActivity: (id: string) => void
 
-  addWish: (wish: Omit<WishItem, 'id' | 'createdAt'>) => string
-  updateWish: (id: string, patch: Partial<Omit<WishItem, 'id'>>) => void
-  deleteWish: (id: string) => void
+  addDayPlanItem: (item: Omit<DayPlanItem, 'id' | 'createdAt'>) => string
+  updateDayPlanItem: (id: string, patch: Partial<Omit<DayPlanItem, 'id'>>) => void
+  deleteDayPlanItem: (id: string) => void
 }
 
 export const useTravelStore = create<TravelState>()(
@@ -86,7 +86,7 @@ export const useTravelStore = create<TravelState>()(
     (set) => ({
       pins: [],
       activities: [],
-      wishes: [],
+      dayPlanItems: [],
 
       addPin: (pin) => {
         const id = uuid()
@@ -104,8 +104,8 @@ export const useTravelStore = create<TravelState>()(
         set((state) => ({
           pins: state.pins.filter((p) => p.id !== id),
           activities: state.activities.filter((a) => a.pinId !== id),
-          wishes: state.wishes.map((w) =>
-            w.pinId === id ? { ...w, pinId: '' } : w,
+          dayPlanItems: state.dayPlanItems.map((d) =>
+            d.pinId === id ? { ...d, pinId: '' } : d,
           ),
         }))
       },
@@ -135,29 +135,39 @@ export const useTravelStore = create<TravelState>()(
         }))
       },
 
-      addWish: (wish) => {
+      addDayPlanItem: (item) => {
         const id = uuid()
         set((state) => ({
-          wishes: [...state.wishes, { ...wish, id, createdAt: Date.now() }],
+          dayPlanItems: [
+            ...state.dayPlanItems,
+            { ...item, id, createdAt: Date.now() },
+          ],
         }))
         return id
       },
-      updateWish: (id, patch) => {
+      updateDayPlanItem: (id, patch) => {
         set((state) => ({
-          wishes: state.wishes.map((w) =>
-            w.id === id ? { ...w, ...patch } : w,
+          dayPlanItems: state.dayPlanItems.map((d) =>
+            d.id === id ? { ...d, ...patch } : d,
           ),
         }))
       },
-      deleteWish: (id) => {
-        set((state) => ({ wishes: state.wishes.filter((w) => w.id !== id) }))
+      deleteDayPlanItem: (id) => {
+        set((state) => ({
+          dayPlanItems: state.dayPlanItems.filter((d) => d.id !== id),
+        }))
       },
     }),
     {
       name: 'travel-journal-storage',
-      version: 5,
+      version: 6,
       migrate: (persisted) => {
-        const state = persisted as { pins?: Pin[]; activities?: Activity[] }
+        const state = persisted as {
+          pins?: Pin[]
+          activities?: Activity[]
+          wishes?: unknown
+          dayPlanItems?: DayPlanItem[]
+        }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
             ...p,
@@ -175,6 +185,10 @@ export const useTravelStore = create<TravelState>()(
             isCategory: a.isCategory ?? false,
           }))
         }
+        // The Speculations & Wishes tab was replaced by day planning -
+        // drop its old data rather than carrying it forward unused.
+        delete state.wishes
+        state.dayPlanItems = state.dayPlanItems ?? []
         return state
       },
     },
