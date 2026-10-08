@@ -695,6 +695,21 @@ h3 {
   gap: 0.3em;
 }
 
+.location-group {
+  margin-bottom: 0.9em;
+}
+
+.location-group-heading {
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  padding: 0 0 0.3em;
+  margin: 0 0 0.4em;
+}
+
 .location-item {
   display: flex;
   align-items: center;

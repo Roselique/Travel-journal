@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useTravelStore, type Activity, type ActivityStatus } from '../store'
+import { compareContinents, locateCountry } from '../lib/geo'
+import { useTravelStore, type Activity, type ActivityStatus, type Pin } from '../store'
 
 const STATUS_LABEL: Record<ActivityStatus, string> = {
   idea: 'Idea',
@@ -195,6 +196,7 @@ export default function ActivitiesTab() {
   const [selectedPinId, setSelectedPinId] = useState<string | null>(
     pins[0]?.id ?? null,
   )
+  const [locationSearch, setLocationSearch] = useState('')
 
   const [categoryTitle, setCategoryTitle] = useState('')
   const [categoryNotes, setCategoryNotes] = useState('')
@@ -266,6 +268,26 @@ export default function ActivitiesTab() {
   const countFor = (pinId: string) =>
     activities.filter((a) => a.pinId === pinId).length
 
+  const groupedLocations = useMemo(() => {
+    const q = locationSearch.trim().toLowerCase()
+    const filtered = q
+      ? pins.filter((p) => p.name.toLowerCase().includes(q))
+      : pins
+    const byContinent = new Map<string, Pin[]>()
+    for (const p of filtered) {
+      const { continent } = locateCountry(p.lat, p.lng)
+      const list = byContinent.get(continent)
+      if (list) list.push(p)
+      else byContinent.set(continent, [p])
+    }
+    return [...byContinent.entries()]
+      .sort((a, b) => compareContinents(a[0], b[0]))
+      .map(([continent, list]) => ({
+        continent,
+        pins: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+  }, [pins, locationSearch])
+
   if (pins.length === 0) {
     return (
       <div className="empty-state">
@@ -279,21 +301,35 @@ export default function ActivitiesTab() {
     <div className="activities-tab">
       <aside className="location-list">
         <h3>Locations</h3>
-        <ul>
-          {pins.map((p) => (
-            <li
-              key={p.id}
-              className={`location-item ${
-                p.id === selectedPinId ? 'active' : ''
-              }`}
-              onClick={() => setSelectedPinId(p.id)}
-            >
-              <span className="dot" style={{ background: p.color }} />
-              <span className="location-name">{p.name}</span>
-              <span className="count">{countFor(p.id)}</span>
-            </li>
-          ))}
-        </ul>
+        <input
+          className="search"
+          placeholder="Search locations..."
+          value={locationSearch}
+          onChange={(e) => setLocationSearch(e.target.value)}
+        />
+        {groupedLocations.length === 0 && (
+          <p className="empty">No matching locations.</p>
+        )}
+        {groupedLocations.map(({ continent, pins: group }) => (
+          <div key={continent} className="location-group">
+            <div className="location-group-heading">{continent}</div>
+            <ul>
+              {group.map((p) => (
+                <li
+                  key={p.id}
+                  className={`location-item ${
+                    p.id === selectedPinId ? 'active' : ''
+                  }`}
+                  onClick={() => setSelectedPinId(p.id)}
+                >
+                  <span className="dot" style={{ background: p.color }} />
+                  <span className="location-name">{p.name}</span>
+                  <span className="count">{countFor(p.id)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </aside>
 
       <section className="activities-panel">
