@@ -970,8 +970,25 @@ h3 {
   margin: 0;
 }
 
-.dayplan-jump {
+.dayplan-range-fields {
+  display: flex;
+  gap: 0.7em;
   flex-shrink: 0;
+}
+
+.dayplan-time-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  font-size: 0.78em;
+  color: var(--text-dim);
+}
+
+.dayplan-item-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85em;
 }
 
 .dayplan-stats {

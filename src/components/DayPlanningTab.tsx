@@ -6,14 +6,21 @@ import { useTravelStore, type DayPlanItem, type Pin } from '../store'
 // goes in the "Anytime" section instead.
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6)
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+// All date-only strings here (YYYY-MM-DD) are treated as plain calendar
+// dates, not tied to any instant - parsed/built/formatted entirely in UTC
+// so a viewer's local timezone offset can never shift the date by a day.
+// Mixing UTC and local-time Date handling for the same string (e.g.
+// building with local midnight but reading back via toISOString) is the
+// classic bug that makes "+1 day" silently stay on the same date for
+// anyone east of UTC - keep every helper below on the UTC side only.
+function parseIsoUTC(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
 }
 
 function addDaysIso(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00`)
-  d.setDate(d.getDate() + n)
-  return d.toISOString().slice(0, 10)
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
 }
 
 function formatHour(h: number): string {
@@ -23,22 +30,33 @@ function formatHour(h: number): string {
 }
 
 function formatShortDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`)
+  const d = parseIsoUTC(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
 }
 
 function formatDayLabel(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`)
+  const d = parseIsoUTC(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 
-type ItemDraft = { time: string; title: string; notes: string; pinId: string }
+type ItemDraft = {
+  time: string
+  endTime: string
+  title: string
+  notes: string
+  pinId: string
+}
 
 function ItemForm({
   initial,
@@ -57,6 +75,7 @@ function ItemForm({
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [pinId, setPinId] = useState(initial?.pinId ?? '')
   const [time, setTime] = useState(initial?.time ?? defaultTime ?? '')
+  const [endTime, setEndTime] = useState(initial?.endTime ?? '')
 
   return (
     <form
@@ -64,19 +83,30 @@ function ItemForm({
       onSubmit={(e) => {
         e.preventDefault()
         if (!title.trim()) return
-        onSave({ time, title: title.trim(), notes, pinId })
+        onSave({ time, endTime, title: title.trim(), notes, pinId })
       }}
     >
       <div className="activity-form-row">
-        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-        <input
-          autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="What's planned?"
-          maxLength={120}
-        />
+        <label className="dayplan-time-field">
+          Start
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </label>
+        <label className="dayplan-time-field">
+          End
+          <input
+            type="time"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+          />
+        </label>
       </div>
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="What's planned?"
+        maxLength={120}
+      />
       <select value={pinId} onChange={(e) => setPinId(e.target.value)}>
         <option value="">No location</option>
         {pins.map((p) => (
@@ -118,6 +148,12 @@ function ItemCard({
   return (
     <div className="dayplan-item-card">
       <div className="dayplan-item-main">
+        {item.time && (
+          <div className="dayplan-item-time">
+            {item.time}
+            {item.endTime && ` – ${item.endTime}`}
+          </div>
+        )}
         <div className="dayplan-title">{item.title}</div>
         {linkedPin && (
           <div className="dayplan-place">
@@ -158,6 +194,8 @@ function DaySchedule({
 
   const untimed = items.filter((i) => !i.time)
   const hourOf = (t: string) => Number.parseInt(t.slice(0, 2), 10)
+  // An item is placed in the hour slot it starts in - a 6:00-8:30 item
+  // shows once, in the 6 AM row, with its end time in the card.
   const itemsInHour = (h: number) =>
     items.filter((i) => i.time && hourOf(i.time) === h)
 
@@ -249,21 +287,27 @@ export default function DayPlanningTab() {
   const addDayPlanItem = useTravelStore((s) => s.addDayPlanItem)
   const updateDayPlanItem = useTravelStore((s) => s.updateDayPlanItem)
   const deleteDayPlanItem = useTravelStore((s) => s.deleteDayPlanItem)
+  const tripStart = useTravelStore((s) => s.tripStart)
+  const tripEnd = useTravelStore((s) => s.tripEnd)
+  const setTripStart = useTravelStore((s) => s.setTripStart)
+  const setTripEnd = useTravelStore((s) => s.setTripEnd)
 
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
-  const [jumpDate, setJumpDate] = useState('')
 
-  // Shows every day between the earliest and latest planned date (filling
-  // gaps, so a quiet middle day still shows as "nothing planned yet"
-  // instead of disappearing), plus whatever date was last jumped to even
-  // before it has any items of its own.
+  // The explicit trip start/end (set via the two date fields) always wins,
+  // so the day list reads like a real itinerary (including quiet days with
+  // nothing planned yet) rather than only the dates that already have an
+  // item. Falls back to the planned items' own date range until a trip
+  // range is set.
   const dayList = useMemo(() => {
-    const dates = new Set(dayPlanItems.map((d) => d.date))
-    if (jumpDate) dates.add(jumpDate)
-    if (dates.size === 0) return []
-    const sorted = [...dates].sort()
-    const start = sorted[0]
-    const end = sorted[sorted.length - 1]
+    let start = tripStart
+    let end = tripEnd
+    if (!start || !end || start > end) {
+      const dates = dayPlanItems.map((d) => d.date).sort()
+      if (dates.length === 0) return []
+      start = dates[0]
+      end = dates[dates.length - 1]
+    }
     const out: string[] = []
     let cur = start
     let guard = 0
@@ -273,7 +317,7 @@ export default function DayPlanningTab() {
       guard++
     }
     return out
-  }, [dayPlanItems, jumpDate])
+  }, [dayPlanItems, tripStart, tripEnd])
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, DayPlanItem[]>()
@@ -306,15 +350,25 @@ export default function DayPlanningTab() {
             </div>
             <h2>Day Planning</h2>
           </div>
-          <input
-            type="date"
-            className="dayplan-jump"
-            value={jumpDate || todayIso()}
-            onChange={(e) => {
-              setJumpDate(e.target.value)
-              setExpandedDate(e.target.value)
-            }}
-          />
+          <div className="dayplan-range-fields">
+            <label className="dayplan-time-field">
+              Start date
+              <input
+                type="date"
+                value={tripStart}
+                onChange={(e) => setTripStart(e.target.value)}
+              />
+            </label>
+            <label className="dayplan-time-field">
+              End date
+              <input
+                type="date"
+                value={tripEnd}
+                min={tripStart || undefined}
+                onChange={(e) => setTripEnd(e.target.value)}
+              />
+            </label>
+          </div>
         </div>
         <div className="dayplan-stats">
           <div className="dayplan-stat">
@@ -335,7 +389,9 @@ export default function DayPlanningTab() {
       <div className="dayplan-daylist">
         <h3>Day by day</h3>
         {dayList.length === 0 && (
-          <p className="empty">Pick a date above to start planning your first day.</p>
+          <p className="empty">
+            Set a start and end date above to lay out your trip.
+          </p>
         )}
         {dayList.map((date, i) => {
           const items = itemsByDate.get(date) ?? []

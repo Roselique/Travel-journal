@@ -57,6 +57,7 @@ export interface DayPlanItem {
   id: string
   date: string // ISO date (YYYY-MM-DD) this item belongs to
   time: string // HH:MM 24h, optional (empty = untimed, sorts after timed items)
+  endTime: string // HH:MM 24h, optional (empty = no set end time)
   title: string
   notes: string
   pinId: string // linked location, empty string if none
@@ -67,6 +68,8 @@ interface TravelState {
   pins: Pin[]
   activities: Activity[]
   dayPlanItems: DayPlanItem[]
+  tripStart: string // ISO date, empty if unset
+  tripEnd: string // ISO date, empty if unset
 
   addPin: (pin: Omit<Pin, 'id' | 'createdAt'>) => string
   updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
@@ -79,6 +82,9 @@ interface TravelState {
   addDayPlanItem: (item: Omit<DayPlanItem, 'id' | 'createdAt'>) => string
   updateDayPlanItem: (id: string, patch: Partial<Omit<DayPlanItem, 'id'>>) => void
   deleteDayPlanItem: (id: string) => void
+
+  setTripStart: (date: string) => void
+  setTripEnd: (date: string) => void
 }
 
 export const useTravelStore = create<TravelState>()(
@@ -87,6 +93,8 @@ export const useTravelStore = create<TravelState>()(
       pins: [],
       activities: [],
       dayPlanItems: [],
+      tripStart: '',
+      tripEnd: '',
 
       addPin: (pin) => {
         const id = uuid()
@@ -157,16 +165,21 @@ export const useTravelStore = create<TravelState>()(
           dayPlanItems: state.dayPlanItems.filter((d) => d.id !== id),
         }))
       },
+
+      setTripStart: (date) => set({ tripStart: date }),
+      setTripEnd: (date) => set({ tripEnd: date }),
     }),
     {
       name: 'travel-journal-storage',
-      version: 6,
+      version: 7,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
           activities?: Activity[]
           wishes?: unknown
           dayPlanItems?: DayPlanItem[]
+          tripStart?: string
+          tripEnd?: string
         }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
@@ -188,7 +201,12 @@ export const useTravelStore = create<TravelState>()(
         // The Speculations & Wishes tab was replaced by day planning -
         // drop its old data rather than carrying it forward unused.
         delete state.wishes
-        state.dayPlanItems = state.dayPlanItems ?? []
+        state.dayPlanItems = (state.dayPlanItems ?? []).map((d) => ({
+          ...d,
+          endTime: d.endTime ?? '',
+        }))
+        state.tripStart = state.tripStart ?? ''
+        state.tripEnd = state.tripEnd ?? ''
         return state
       },
     },
