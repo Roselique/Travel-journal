@@ -960,6 +960,18 @@ h3 {
   margin-top: 0.3em;
 }
 
+.activity-place {
+  color: var(--accent);
+  font-size: 0.8em;
+  margin-top: 0.2em;
+}
+
+.activity-transport {
+  color: var(--text-dim);
+  font-size: 0.78em;
+  margin-top: 0.1em;
+}
+
 .activity-controls {
   display: flex;
   flex-direction: column;

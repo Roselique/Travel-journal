@@ -49,6 +49,9 @@ export interface Activity {
   time: string // HH:MM 24h, optional (empty = untimed)
   endTime: string // HH:MM 24h, optional (empty = no set end time)
   price: string // free-form (e.g. "$40"), optional (empty string if unset)
+  district: string // the exact place/district, e.g. "Shibuya", empty if unset
+  transportHub: string // nearest public transport hub, e.g. "Shibuya Station", empty if unset
+  walkTime: string // free-form walk time from the hub, e.g. "5 min", empty if unset
   parentId: string // id of a category activity (e.g. "Museums"), empty if ungrouped
   isCategory: boolean // a pure grouping header created via the category form
   status: ActivityStatus
@@ -231,7 +234,7 @@ export const useTravelStore = create<TravelState>()(
     }),
     {
       name: 'travel-journal-storage',
-      version: 11,
+      version: 12,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
@@ -260,6 +263,9 @@ export const useTravelStore = create<TravelState>()(
             isCategory: a.isCategory ?? false,
             time: a.time ?? '',
             endTime: a.endTime ?? '',
+            district: a.district ?? '',
+            transportHub: a.transportHub ?? '',
+            walkTime: a.walkTime ?? '',
           }))
         }
         // The Speculations & Wishes tab was replaced by day planning -

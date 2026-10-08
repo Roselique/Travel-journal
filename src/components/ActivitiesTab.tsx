@@ -38,6 +38,9 @@ function ActivityRow({
     time: string
     endTime: string
     price: string
+    district: string
+    transportHub: string
+    walkTime: string
   }) => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -47,6 +50,9 @@ function ActivityRow({
   const [time, setTime] = useState(activity.time)
   const [endTime, setEndTime] = useState(activity.endTime)
   const [price, setPrice] = useState(activity.price)
+  const [district, setDistrict] = useState(activity.district)
+  const [transportHub, setTransportHub] = useState(activity.transportHub)
+  const [walkTime, setWalkTime] = useState(activity.walkTime)
 
   const startEdit = () => {
     setTitle(activity.title)
@@ -55,6 +61,9 @@ function ActivityRow({
     setTime(activity.time)
     setEndTime(activity.endTime)
     setPrice(activity.price)
+    setDistrict(activity.district)
+    setTransportHub(activity.transportHub)
+    setWalkTime(activity.walkTime)
     setEditing(true)
   }
 
@@ -65,7 +74,17 @@ function ActivityRow({
         onSubmit={(e) => {
           e.preventDefault()
           if (!title.trim()) return
-          onEdit({ title: title.trim(), notes, date, time, endTime, price: price.trim() })
+          onEdit({
+            title: title.trim(),
+            notes,
+            date,
+            time,
+            endTime,
+            price: price.trim(),
+            district: district.trim(),
+            transportHub: transportHub.trim(),
+            walkTime: walkTime.trim(),
+          })
           setEditing(false)
         }}
       >
@@ -95,6 +114,26 @@ function ActivityRow({
             <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
           </label>
         </div>
+        <input
+          value={district}
+          onChange={(e) => setDistrict(e.target.value)}
+          placeholder="Place / district, e.g. Shibuya"
+          maxLength={120}
+        />
+        <div className="activity-form-row">
+          <input
+            value={transportHub}
+            onChange={(e) => setTransportHub(e.target.value)}
+            placeholder="Nearest transport hub, e.g. Shibuya Station"
+            maxLength={120}
+          />
+          <input
+            value={walkTime}
+            onChange={(e) => setWalkTime(e.target.value)}
+            placeholder="Walk time, e.g. 5 min"
+            maxLength={40}
+          />
+        </div>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -116,6 +155,12 @@ function ActivityRow({
   const timeRange = activity.time
     ? `${activity.time}${activity.endTime ? ` – ${activity.endTime}` : ''}`
     : ''
+  const transportLine = [
+    activity.transportHub,
+    activity.walkTime && `${activity.walkTime} walk`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <>
@@ -127,6 +172,8 @@ function ActivityRow({
             {[activity.date, timeRange, activity.price].filter(Boolean).join(' · ')}
           </div>
         )}
+        {activity.district && <div className="activity-place">{activity.district}</div>}
+        {transportLine && <div className="activity-transport">{transportLine}</div>}
       </div>
       <div className={compact ? 'activity-controls compact' : 'activity-controls'}>
         <select
@@ -232,6 +279,9 @@ export default function ActivitiesTab() {
   const [time, setTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [price, setPrice] = useState('')
+  const [district, setDistrict] = useState('')
+  const [transportHub, setTransportHub] = useState('')
+  const [walkTime, setWalkTime] = useState('')
   const [parentId, setParentId] = useState('')
   const [status, setStatus] = useState<ActivityStatus>('idea')
 
@@ -377,6 +427,9 @@ export default function ActivitiesTab() {
                   time: '',
                   endTime: '',
                   price: '',
+                  district: '',
+                  transportHub: '',
+                  walkTime: '',
                   parentId: '',
                   isCategory: true,
                   status: 'idea',
@@ -413,6 +466,9 @@ export default function ActivitiesTab() {
                   time,
                   endTime,
                   price: price.trim(),
+                  district: district.trim(),
+                  transportHub: transportHub.trim(),
+                  walkTime: walkTime.trim(),
                   parentId,
                   isCategory: false,
                   status,
@@ -423,6 +479,9 @@ export default function ActivitiesTab() {
                 setTime('')
                 setEndTime('')
                 setPrice('')
+                setDistrict('')
+                setTransportHub('')
+                setWalkTime('')
                 setParentId('')
                 setStatus('idea')
               }}
@@ -459,6 +518,26 @@ export default function ActivitiesTab() {
                     onChange={(e) => setEndTime(e.target.value)}
                   />
                 </label>
+              </div>
+              <input
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+                placeholder="Place / district, e.g. Shibuya"
+                maxLength={120}
+              />
+              <div className="activity-form-row">
+                <input
+                  value={transportHub}
+                  onChange={(e) => setTransportHub(e.target.value)}
+                  placeholder="Nearest transport hub, e.g. Shibuya Station"
+                  maxLength={120}
+                />
+                <input
+                  value={walkTime}
+                  onChange={(e) => setWalkTime(e.target.value)}
+                  placeholder="Walk time, e.g. 5 min"
+                  maxLength={40}
+                />
               </div>
               <div className="activity-form-row">
                 <select
