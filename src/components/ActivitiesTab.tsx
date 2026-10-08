@@ -217,7 +217,6 @@ export default function ActivitiesTab() {
   const addActivity = useTravelStore((s) => s.addActivity)
   const updateActivity = useTravelStore((s) => s.updateActivity)
   const deleteActivity = useTravelStore((s) => s.deleteActivity)
-  const updatePin = useTravelStore((s) => s.updatePin)
 
   const [selectedPinId, setSelectedPinId] = useState<string | null>(
     pins[0]?.id ?? null,
@@ -240,10 +239,6 @@ export default function ActivitiesTab() {
     () => new Set(),
   )
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
-  const [categoryFilter, setCategoryFilter] = useState<string>('')
-  const [addingStay, setAddingStay] = useState(false)
-  const [stayName, setStayName] = useState('')
-  const [stayNotes, setStayNotes] = useState('')
 
   const toggleGroup = (id: string) => {
     setCollapsedGroups((prev) => {
@@ -261,11 +256,6 @@ export default function ActivitiesTab() {
       setSelectedPinId(pins[0].id)
     }
   }, [selectedPin, pins])
-
-  useEffect(() => {
-    setCategoryFilter('')
-    setAddingStay(false)
-  }, [selectedPinId])
 
   const pinActivities = useMemo(
     () =>
@@ -373,138 +363,6 @@ export default function ActivitiesTab() {
         {selectedPin && (
           <>
             <h2>{selectedPin.name}</h2>
-
-            <div className="stay-section">
-              <div className="section-label">Stay</div>
-              {addingStay ? (
-                <form
-                  className="stay-form"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    if (!stayName.trim()) return
-                    updatePin(selectedPin.id, { stayName: stayName.trim(), stayNotes })
-                    setAddingStay(false)
-                  }}
-                >
-                  <input
-                    autoFocus
-                    value={stayName}
-                    onChange={(e) => setStayName(e.target.value)}
-                    placeholder="Hotel / reservation name"
-                    maxLength={120}
-                  />
-                  <input
-                    value={stayNotes}
-                    onChange={(e) => setStayNotes(e.target.value)}
-                    placeholder="Dates, confirmation #, address... (optional)"
-                    maxLength={200}
-                  />
-                  <div className="activity-edit-actions">
-                    <button type="submit" className="primary small">
-                      Save
-                    </button>
-                    <button type="button" className="small" onClick={() => setAddingStay(false)}>
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : selectedPin.stayName ? (
-                <div className="stay-card">
-                  <div className="activity-main">
-                    <div className="activity-title">{selectedPin.stayName}</div>
-                    {selectedPin.stayNotes && (
-                      <div className="activity-notes">{selectedPin.stayNotes}</div>
-                    )}
-                  </div>
-                  <div className="activity-controls">
-                    <button
-                      type="button"
-                      className="small"
-                      onClick={() => {
-                        setStayName(selectedPin.stayName)
-                        setStayNotes(selectedPin.stayNotes)
-                        setAddingStay(true)
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="danger small"
-                      onClick={() => updatePin(selectedPin.id, { stayName: '', stayNotes: '' })}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="dayplan-add-slot stay-add"
-                  onClick={() => {
-                    setStayName('')
-                    setStayNotes('')
-                    setAddingStay(true)
-                  }}
-                >
-                  + add accommodation reservation
-                </button>
-              )}
-              <a
-                className="stay-search-link"
-                href={`https://www.google.com/search?q=${encodeURIComponent(
-                  `hotels in ${selectedPin.name}`,
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Search hotels in {selectedPin.name} →
-              </a>
-            </div>
-
-            <div className="places-overview">
-              <div className="places-overview-top">
-                <div className="section-label">Places in {selectedPin.name}</div>
-                <div className="places-overview-stats">
-                  {pinActivities.filter((a) => !a.isCategory).length} saved
-                </div>
-              </div>
-              <div className="category-pills">
-                <button
-                  type="button"
-                  className={`category-pill ${categoryFilter === '' ? 'active' : ''}`}
-                  onClick={() => setCategoryFilter('')}
-                >
-                  All
-                  <span className="pill-count">
-                    {pinActivities.filter((a) => !a.isCategory).length}
-                  </span>
-                </button>
-                {grouped.categories.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`category-pill ${categoryFilter === c.id ? 'active' : ''}`}
-                    onClick={() => setCategoryFilter(c.id)}
-                  >
-                    {c.title}
-                    <span className="pill-count">
-                      {(grouped.childrenByCategory.get(c.id) ?? []).length}
-                    </span>
-                  </button>
-                ))}
-                {grouped.ungrouped.length > 0 && (
-                  <button
-                    type="button"
-                    className={`category-pill ${categoryFilter === '__ungrouped__' ? 'active' : ''}`}
-                    onClick={() => setCategoryFilter('__ungrouped__')}
-                  >
-                    Other
-                    <span className="pill-count">{grouped.ungrouped.length}</span>
-                  </button>
-                )}
-              </div>
-            </div>
 
             <form
               className="category-form"
@@ -640,9 +498,7 @@ export default function ActivitiesTab() {
               <p className="empty">No activities planned yet.</p>
             )}
 
-            {grouped.categories
-              .filter((cat) => categoryFilter === '' || categoryFilter === cat.id)
-              .map((cat) => {
+            {grouped.categories.map((cat) => {
               const children = grouped.childrenByCategory.get(cat.id) ?? []
               const collapsed = collapsedGroups.has(cat.id)
               return (
@@ -724,8 +580,7 @@ export default function ActivitiesTab() {
             })}
 
             <ul className="activity-list">
-              {(categoryFilter === '' || categoryFilter === '__ungrouped__') &&
-                grouped.ungrouped.map((a) => (
+              {grouped.ungrouped.map((a) => (
                 <li key={a.id} className={`activity-item status-${a.status}`}>
                   <ActivityRow
                     activity={a}

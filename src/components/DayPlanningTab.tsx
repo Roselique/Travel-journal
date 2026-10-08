@@ -1,5 +1,80 @@
 import { useMemo, useState } from 'react'
-import { useTravelStore, type DayPlanItem, type Pin, type Trip } from '../store'
+import { useTravelStore, type Activity, type DayPlanItem, type Pin, type Trip } from '../store'
+import { esriExportImageUrl, fitMercatorBBox, projectToPixel } from '../lib/mercator'
+
+const JOURNEY_MAP_WIDTH = 900
+const JOURNEY_MAP_HEIGHT = 380
+
+// The trip's route: every pin a day was linked to, in the order it's first
+// visited, with how many days (not necessarily consecutive) end up pointing
+// at it. Pins never linked to a day don't appear - this traces the
+// itinerary actually laid out, not every pin that exists.
+function JourneyMap({ stops }: { stops: { pin: Pin; days: number }[] }) {
+  if (stops.length === 0) {
+    return (
+      <div className="journey-map journey-map-empty">
+        <p className="empty">
+          Link a pin to a day below to see your route here.
+        </p>
+      </div>
+    )
+  }
+
+  const bbox = fitMercatorBBox(
+    stops.map((s) => s.pin),
+    JOURNEY_MAP_WIDTH,
+    JOURNEY_MAP_HEIGHT,
+  )
+  const imageUrl = esriExportImageUrl(bbox, JOURNEY_MAP_WIDTH, JOURNEY_MAP_HEIGHT)
+  const points = stops.map((s) => ({
+    ...s,
+    px: projectToPixel(s.pin.lat, s.pin.lng, bbox, JOURNEY_MAP_WIDTH, JOURNEY_MAP_HEIGHT),
+  }))
+  const pathD = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.px.x} ${p.px.y}`)
+    .join(' ')
+
+  return (
+    <div className="journey-map">
+      <img
+        className="journey-map-image"
+        src={imageUrl}
+        alt="Map of the trip's route"
+        width={JOURNEY_MAP_WIDTH}
+        height={JOURNEY_MAP_HEIGHT}
+      />
+      <svg
+        className="journey-map-overlay"
+        viewBox={`0 0 ${JOURNEY_MAP_WIDTH} ${JOURNEY_MAP_HEIGHT}`}
+      >
+        {points.length > 1 && (
+          <path d={pathD} className="journey-route-line" fill="none" />
+        )}
+        {points.map((p, i) => (
+          <g key={p.pin.id}>
+            <foreignObject
+              x={p.px.x - 60}
+              y={p.px.y - 46}
+              width={120}
+              height={34}
+            >
+              <div className="journey-pin-label">
+                <span className="journey-pin-name">{p.pin.name}</span>
+                <span className="journey-pin-days">
+                  {p.days} {p.days === 1 ? 'day' : 'days'}
+                </span>
+              </div>
+            </foreignObject>
+            <circle cx={p.px.x} cy={p.px.y} r={7} fill={p.pin.color} className="journey-pin-dot" />
+            <text x={p.px.x} y={p.px.y + 1} className="journey-pin-num" textAnchor="middle">
+              {i + 1}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
 
 // Schedule grid spans 6 AM to 10 PM - covers a normal waking day without
 // making the grid absurdly long; anything outside that (or without a time)
@@ -299,6 +374,157 @@ function DaySchedule({
   )
 }
 
+// Stay reservation + category breakdown for one pin on the route. The
+// pill counts are a read-only summary here (there's no activity list on
+// this tab to filter) - full browsing/editing of individual places still
+// happens on the Activities tab.
+function PlacesOverview({
+  pin,
+  activities,
+  updatePin,
+}: {
+  pin: Pin
+  activities: Activity[]
+  updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
+}) {
+  const [addingStay, setAddingStay] = useState(false)
+  const [stayName, setStayName] = useState('')
+  const [stayNotes, setStayNotes] = useState('')
+
+  const pinActivities = useMemo(
+    () => activities.filter((a) => a.pinId === pin.id),
+    [activities, pin.id],
+  )
+  const categories = pinActivities.filter((a) => a.isCategory)
+  const categoryIds = new Set(categories.map((c) => c.id))
+  const countByCategory = new Map<string, number>()
+  let ungroupedCount = 0
+  for (const a of pinActivities) {
+    if (a.isCategory) continue
+    if (a.parentId && categoryIds.has(a.parentId)) {
+      countByCategory.set(a.parentId, (countByCategory.get(a.parentId) ?? 0) + 1)
+    } else {
+      ungroupedCount++
+    }
+  }
+  const savedCount = pinActivities.filter((a) => !a.isCategory).length
+
+  return (
+    <div className="places-stay-overview">
+      <div className="stay-section">
+        <div className="section-label">Stay</div>
+        {addingStay ? (
+          <form
+            className="stay-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!stayName.trim()) return
+              updatePin(pin.id, { stayName: stayName.trim(), stayNotes })
+              setAddingStay(false)
+            }}
+          >
+            <input
+              autoFocus
+              value={stayName}
+              onChange={(e) => setStayName(e.target.value)}
+              placeholder="Hotel / reservation name"
+              maxLength={120}
+            />
+            <input
+              value={stayNotes}
+              onChange={(e) => setStayNotes(e.target.value)}
+              placeholder="Dates, confirmation #, address... (optional)"
+              maxLength={200}
+            />
+            <div className="activity-edit-actions">
+              <button type="submit" className="primary small">
+                Save
+              </button>
+              <button type="button" className="small" onClick={() => setAddingStay(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : pin.stayName ? (
+          <div className="stay-card">
+            <div className="activity-main">
+              <div className="activity-title">{pin.stayName}</div>
+              {pin.stayNotes && <div className="activity-notes">{pin.stayNotes}</div>}
+            </div>
+            <div className="activity-controls">
+              <button
+                type="button"
+                className="small"
+                onClick={() => {
+                  setStayName(pin.stayName)
+                  setStayNotes(pin.stayNotes)
+                  setAddingStay(true)
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="danger small"
+                onClick={() => updatePin(pin.id, { stayName: '', stayNotes: '' })}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="dayplan-add-slot stay-add"
+            onClick={() => {
+              setStayName('')
+              setStayNotes('')
+              setAddingStay(true)
+            }}
+          >
+            + add accommodation reservation
+          </button>
+        )}
+        <a
+          className="stay-search-link"
+          href={`https://www.google.com/search?q=${encodeURIComponent(`hotels in ${pin.name}`)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Search hotels in {pin.name} →
+        </a>
+      </div>
+
+      <div className="places-overview">
+        <div className="places-overview-top">
+          <div className="section-label">Places in {pin.name}</div>
+          <div className="places-overview-stats">{savedCount} saved</div>
+        </div>
+        <div className="category-pills">
+          {categories.length === 0 && ungroupedCount === 0 ? (
+            <span className="category-pill static">No places saved yet</span>
+          ) : (
+            <>
+              {categories.map((c) => (
+                <span key={c.id} className="category-pill static">
+                  {c.title}
+                  <span className="pill-count">{countByCategory.get(c.id) ?? 0}</span>
+                </span>
+              ))}
+              {ungroupedCount > 0 && (
+                <span className="category-pill static">
+                  Other
+                  <span className="pill-count">{ungroupedCount}</span>
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type TripDraft = { name: string; destination: string; tripStart: string; tripEnd: string }
 
 function TripForm({
@@ -411,6 +637,7 @@ function TripCard({
 function TripDetail({
   trip,
   pins,
+  activities,
   dayPlanItems,
   dayLocations,
   onBack,
@@ -420,9 +647,11 @@ function TripDetail({
   updateDayPlanItem,
   deleteDayPlanItem,
   setDayLocation,
+  updatePin,
 }: {
   trip: Trip
   pins: Pin[]
+  activities: Activity[]
   dayPlanItems: DayPlanItem[]
   dayLocations: Record<string, string>
   onBack: () => void
@@ -432,9 +661,11 @@ function TripDetail({
   updateDayPlanItem: (id: string, patch: Partial<Omit<DayPlanItem, 'id'>>) => void
   deleteDayPlanItem: (id: string) => void
   setDayLocation: (tripId: string, date: string, pinId: string) => void
+  updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
 }) {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [editingTrip, setEditingTrip] = useState(false)
+  const [overviewPinId, setOverviewPinId] = useState<string | null>(null)
 
   // The trip's start/end dates always win, so the day list reads like a
   // real itinerary (including quiet days with nothing planned yet) rather
@@ -474,6 +705,27 @@ function TripDetail({
     () => new Set(Object.values(dayLocations).filter(Boolean)).size,
     [dayLocations],
   )
+
+  // The route: every pin a day links to, in the order it's first visited,
+  // with how many of the trip's days (not necessarily consecutive) point at
+  // it. Days with no linked pin are skipped rather than breaking the route.
+  const routeStops = useMemo(() => {
+    const order: string[] = []
+    const daysByPin = new Map<string, number>()
+    for (const date of dayList) {
+      const pinId = dayLocations[date]
+      if (!pinId) continue
+      if (!order.includes(pinId)) order.push(pinId)
+      daysByPin.set(pinId, (daysByPin.get(pinId) ?? 0) + 1)
+    }
+    return order
+      .map((id) => pins.find((p) => p.id === id))
+      .filter((p): p is Pin => !!p)
+      .map((pin) => ({ pin, days: daysByPin.get(pin.id) ?? 0 }))
+  }, [dayList, dayLocations, pins])
+
+  const activeOverviewPin =
+    routeStops.find((s) => s.pin.id === overviewPinId)?.pin ?? routeStops[0]?.pin ?? null
 
   const toggleDay = (date: string) => {
     setExpandedDate((prev) => (prev === date ? null : date))
@@ -530,6 +782,31 @@ function TripDetail({
           </div>
         </div>
       </div>
+
+      <div className="journey-section">
+        <h3>Your journey</h3>
+        <JourneyMap stops={routeStops} />
+      </div>
+
+      {activeOverviewPin && (
+        <div className="journey-section">
+          {routeStops.length > 1 && (
+            <div className="journey-city-tabs">
+              {routeStops.map(({ pin }) => (
+                <button
+                  key={pin.id}
+                  type="button"
+                  className={`journey-city-tab ${activeOverviewPin.id === pin.id ? 'active' : ''}`}
+                  onClick={() => setOverviewPinId(pin.id)}
+                >
+                  {pin.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <PlacesOverview pin={activeOverviewPin} activities={activities} updatePin={updatePin} />
+        </div>
+      )}
 
       <div className="dayplan-daylist">
         <h3>Day by day</h3>
@@ -597,6 +874,7 @@ function TripDetail({
 
 export default function DayPlanningTab() {
   const pins = useTravelStore((s) => s.pins)
+  const activities = useTravelStore((s) => s.activities)
   const trips = useTravelStore((s) => s.trips)
   const dayPlanItems = useTravelStore((s) => s.dayPlanItems)
   const dayLocations = useTravelStore((s) => s.dayLocations)
@@ -607,6 +885,7 @@ export default function DayPlanningTab() {
   const updateDayPlanItem = useTravelStore((s) => s.updateDayPlanItem)
   const deleteDayPlanItem = useTravelStore((s) => s.deleteDayPlanItem)
   const setDayLocation = useTravelStore((s) => s.setDayLocation)
+  const updatePin = useTravelStore((s) => s.updatePin)
 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [creatingTrip, setCreatingTrip] = useState(false)
@@ -625,6 +904,7 @@ export default function DayPlanningTab() {
       <TripDetail
         trip={selectedTrip}
         pins={pins}
+        activities={activities}
         dayPlanItems={tripItems}
         dayLocations={tripDayLocations}
         onBack={() => setSelectedTripId(null)}
@@ -636,6 +916,7 @@ export default function DayPlanningTab() {
         addDayPlanItem={addDayPlanItem}
         updateDayPlanItem={updateDayPlanItem}
         deleteDayPlanItem={deleteDayPlanItem}
+        updatePin={updatePin}
         setDayLocation={setDayLocation}
       />
     )
