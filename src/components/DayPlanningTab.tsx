@@ -186,6 +186,7 @@ const HOURS = Array.from({ length: 17 }, (_, i) => i + 6)
 const HOUR_PX = 60 // 1 minute of the day == 1px, so block geometry is just arithmetic on minutes
 const MIN_BLOCK_PX = 30 // floor height so a short/open-ended item is still a visible, clickable block
 const GRID_START_MIN = HOURS[0] * 60
+const GRID_END_MIN = (HOURS[HOURS.length - 1] + 1) * 60
 
 function parseMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number)
@@ -491,15 +492,22 @@ function ItemCard({
 // instead of bursting out of a short block.
 function TimelineBlockCard({
   item,
+  clippedTop,
+  clippedBottom,
   onEdit,
   onDelete,
 }: {
   item: DayPlanItem
+  clippedTop: boolean
+  clippedBottom: boolean
   onEdit: () => void
   onDelete: () => void
 }) {
   return (
     <div className="dayplan-block-card">
+      {clippedTop && (
+        <div className="dayplan-block-clip dayplan-block-clip-top" title={`Starts at ${item.time}, before the grid`} />
+      )}
       <div className="dayplan-block-actions">
         <button type="button" className="small" onClick={onEdit}>
           Edit
@@ -517,6 +525,9 @@ function TimelineBlockCard({
       {item.location && <div className="dayplan-place">{item.location}</div>}
       {item.price && <div className="dayplan-price">{item.price}</div>}
       {item.notes && <div className="dayplan-notes">{item.notes}</div>}
+      {clippedBottom && (
+        <div className="dayplan-block-clip dayplan-block-clip-bottom" title={`Ends at ${item.endTime}, after the grid`} />
+      )}
     </div>
   )
 }
@@ -613,8 +624,19 @@ function DaySchedule({
 
           {timedBlocks.map(({ item, startMin, endMin, col, cols }) => {
             const editing = editingId === item.id
-            const top = startMin - GRID_START_MIN
-            const height = Math.max(endMin - startMin, MIN_BLOCK_PX)
+            const gridHeight = GRID_END_MIN - GRID_START_MIN
+            const rawTop = startMin - GRID_START_MIN
+            const rawBottom = endMin - GRID_START_MIN
+            // An item starting before 6am or ending after 11pm used to be
+            // positioned off the top/bottom of the grid entirely - pushing
+            // its Edit/Delete buttons behind the day-block's overflow:hidden
+            // and out of reach. Clamp it to the visible grid instead, with a
+            // torn-edge marker on whichever side got cut off.
+            const clippedTop = rawTop < 0
+            const clippedBottom = rawBottom > gridHeight
+            const top = Math.max(rawTop, 0)
+            const bottom = Math.min(rawBottom, gridHeight)
+            const height = Math.max(bottom - top, MIN_BLOCK_PX)
             const style = editing
               ? { top, left: 0, width: '100%', zIndex: 3 }
               : {
@@ -642,6 +664,8 @@ function DaySchedule({
                 ) : (
                   <TimelineBlockCard
                     item={item}
+                    clippedTop={clippedTop}
+                    clippedBottom={clippedBottom}
                     onEdit={() => setEditingId(item.id)}
                     onDelete={() => onDelete(item.id)}
                   />
