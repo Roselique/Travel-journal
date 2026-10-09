@@ -1235,6 +1235,7 @@ h3 {
   text-align: center;
   gap: 0.25em;
   pointer-events: none;
+  line-height: normal;
 }
 
 .journey-pin-name {
@@ -1257,6 +1258,62 @@ h3 {
   padding: 0.1em 0.5em;
   border-radius: 4px;
   white-space: nowrap;
+}
+
+.journey-cluster-leader {
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 3;
+}
+
+.journey-cluster-label {
+  background: rgba(10, 16, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 4px 6px;
+  pointer-events: none;
+  /* .journey-map sets line-height: 0 to collapse whitespace under its
+     <img>, which otherwise inherits into this foreignObject's HTML and
+     collapses every text line here to zero height - reset it. */
+  line-height: normal;
+}
+
+.journey-cluster-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  height: 20px;
+}
+
+.journey-cluster-num {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #06111d;
+}
+
+.journey-cluster-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.journey-cluster-days {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dayplan-daylist {

@@ -11,6 +11,55 @@ import { esriExportImageUrl, fitMercatorBBox, projectToPixel } from '../lib/merc
 const JOURNEY_MAP_WIDTH = 900
 const JOURNEY_MAP_HEIGHT = 380
 
+// Pins whose dots land within this many px of each other would have
+// overlapping floating labels, so they're grouped and labelled together
+// instead (see groupByProximity below).
+const LABEL_CLUSTER_PX = 70
+const CLUSTER_ROW_H = 24
+const CLUSTER_BOX_W = 170
+
+interface RoutePoint {
+  pin: Pin
+  days: number
+  index: number
+  px: { x: number; y: number }
+}
+
+// Union-find over pixel proximity: any two points closer than
+// LABEL_CLUSTER_PX end up in the same group, and that grouping is
+// transitive (a chain of close points all merge into one cluster) so a
+// tight row of cities - Kyoto/Nara/Kobe/Himeji/Osaka - becomes a single
+// group even though not every pair in it is that close to every other.
+function groupByProximity(points: RoutePoint[]): RoutePoint[][] {
+  const parent = points.map((_, i) => i)
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]]
+      i = parent[i]
+    }
+    return i
+  }
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const dx = points[i].px.x - points[j].px.x
+      const dy = points[i].px.y - points[j].px.y
+      if (Math.hypot(dx, dy) < LABEL_CLUSTER_PX) {
+        const ri = find(i)
+        const rj = find(j)
+        if (ri !== rj) parent[ri] = rj
+      }
+    }
+  }
+  const groups = new Map<number, RoutePoint[]>()
+  points.forEach((p, i) => {
+    const root = find(i)
+    const list = groups.get(root)
+    if (list) list.push(p)
+    else groups.set(root, [p])
+  })
+  return [...groups.values()]
+}
+
 // The trip's route: every pin a day was linked to, in the order it's first
 // visited, with how many days (not necessarily consecutive) end up pointing
 // at it. Pins never linked to a day don't appear - this traces the
@@ -32,13 +81,15 @@ function JourneyMap({ stops }: { stops: { pin: Pin; days: number }[] }) {
     JOURNEY_MAP_HEIGHT,
   )
   const imageUrl = esriExportImageUrl(bbox, JOURNEY_MAP_WIDTH, JOURNEY_MAP_HEIGHT)
-  const points = stops.map((s) => ({
+  const points: RoutePoint[] = stops.map((s, index) => ({
     ...s,
+    index,
     px: projectToPixel(s.pin.lat, s.pin.lng, bbox, JOURNEY_MAP_WIDTH, JOURNEY_MAP_HEIGHT),
   }))
   const pathD = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.px.x} ${p.px.y}`)
     .join(' ')
+  const groups = groupByProximity(points)
 
   return (
     <div className="journey-map">
@@ -56,27 +107,73 @@ function JourneyMap({ stops }: { stops: { pin: Pin; days: number }[] }) {
         {points.length > 1 && (
           <path d={pathD} className="journey-route-line" fill="none" />
         )}
-        {points.map((p, i) => (
+        {points.map((p) => (
           <g key={p.pin.id}>
+            <circle cx={p.px.x} cy={p.px.y} r={7} fill={p.pin.color} className="journey-pin-dot" />
+            <text x={p.px.x} y={p.px.y + 1} className="journey-pin-num" textAnchor="middle">
+              {p.index + 1}
+            </text>
+          </g>
+        ))}
+        {groups.map((group) =>
+          group.length === 1 ? (
             <foreignObject
-              x={p.px.x - 75}
-              y={p.px.y - 64}
+              key={group[0].pin.id}
+              x={group[0].px.x - 75}
+              y={Math.max(0, group[0].px.y - 64)}
               width={150}
               height={52}
             >
               <div className="journey-pin-label">
-                <span className="journey-pin-name">{p.pin.name}</span>
+                <span className="journey-pin-name">{group[0].pin.name}</span>
                 <span className="journey-pin-days">
-                  {p.days} {p.days === 1 ? 'day' : 'days'}
+                  {group[0].days} {group[0].days === 1 ? 'day' : 'days'}
                 </span>
               </div>
             </foreignObject>
-            <circle cx={p.px.x} cy={p.px.y} r={7} fill={p.pin.color} className="journey-pin-dot" />
-            <text x={p.px.x} y={p.px.y + 1} className="journey-pin-num" textAnchor="middle">
-              {i + 1}
-            </text>
-          </g>
-        ))}
+          ) : (
+            (() => {
+              const cx = group.reduce((sum, p) => sum + p.px.x, 0) / group.length
+              const cy = group.reduce((sum, p) => sum + p.px.y, 0) / group.length
+              const boxHeight = group.length * CLUSTER_ROW_H + 8
+              const boxX = Math.min(
+                Math.max(cx - CLUSTER_BOX_W / 2, 0),
+                JOURNEY_MAP_WIDTH - CLUSTER_BOX_W,
+              )
+              const boxY = Math.max(0, cy - boxHeight - 22)
+              const key = group.map((p) => p.pin.id).join('-')
+              return (
+                <g key={key}>
+                  <line
+                    x1={cx}
+                    y1={cy}
+                    x2={boxX + CLUSTER_BOX_W / 2}
+                    y2={boxY + boxHeight}
+                    className="journey-cluster-leader"
+                  />
+                  <foreignObject x={boxX} y={boxY} width={CLUSTER_BOX_W} height={boxHeight}>
+                    <div className="journey-cluster-label">
+                      {group.map((p) => (
+                        <div key={p.pin.id} className="journey-cluster-row">
+                          <span
+                            className="journey-cluster-num"
+                            style={{ background: p.pin.color }}
+                          >
+                            {p.index + 1}
+                          </span>
+                          <span className="journey-cluster-name">{p.pin.name}</span>
+                          <span className="journey-cluster-days">
+                            {p.days}d
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </foreignObject>
+                </g>
+              )
+            })()
+          ),
+        )}
       </svg>
     </div>
   )
