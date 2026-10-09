@@ -81,6 +81,7 @@ export const DAY_ITEM_CATEGORIES = [
   'Shopping',
   'Activities',
   'Photo Spots',
+  'Travelling',
 ] as const
 
 export interface Trip {
