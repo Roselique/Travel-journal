@@ -73,11 +73,12 @@ export interface DayPlanItem {
 }
 
 export const DAY_ITEM_CATEGORIES = [
-  'Sights',
+  'Museum',
+  'Temple',
+  'Nature',
   'Restaurants',
-  'Coffee',
   'Bars',
-  'Spas',
+  'Shopping',
   'Activities',
   'Photo Spots',
 ] as const
