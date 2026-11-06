@@ -37,6 +37,23 @@ interface PendingPin {
   lng: number
 }
 
+// Pulsing ring beacon on the globe surface, drawn for the pin currently
+// open in the side panel and for the trip's next upcoming stop, so either
+// one is easy to spot even with many pins on screen.
+interface RingDatum {
+  lat: number
+  lng: number
+  color: [number, number, number]
+  maxR: number
+  propagationSpeed: number
+  repeatPeriod: number
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.replace('#', ''), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
 // Route-arc label datum, distinguished from a Pin by the `__legLabel` tag so
 // a single combined htmlElementsData array can hold both and createPinElement
 // can branch on which one it's building. routeKey is 'live' for the route
@@ -395,6 +412,7 @@ export default function MapTab() {
   const addPin = useTravelStore((s) => s.addPin)
   const updatePin = useTravelStore((s) => s.updatePin)
   const deletePin = useTravelStore((s) => s.deletePin)
+  const dayLocations = useTravelStore((s) => s.dayLocations)
 
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -447,6 +465,51 @@ export default function MapTab() {
     () => pins.find((p) => p.id === selectedId) ?? null,
     [pins, selectedId],
   )
+
+  // The nearest day (today or later, across every trip) that's linked to a
+  // pin - i.e. the next place the itinerary actually sends you.
+  const upcomingPinId = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    let bestDate: string | null = null
+    let bestPinId: string | null = null
+    for (const [key, pinId] of Object.entries(dayLocations)) {
+      const date = key.slice(key.indexOf('::') + 2)
+      if (date < today) continue
+      if (bestDate === null || date < bestDate) {
+        bestDate = date
+        bestPinId = pinId
+      }
+    }
+    return bestPinId
+  }, [dayLocations])
+
+  const ringsData = useMemo<RingDatum[]>(() => {
+    const rings: RingDatum[] = []
+    if (selectedPin) {
+      rings.push({
+        lat: selectedPin.lat,
+        lng: selectedPin.lng,
+        color: [255, 255, 255],
+        maxR: 4,
+        propagationSpeed: 3,
+        repeatPeriod: 1200,
+      })
+    }
+    if (upcomingPinId && upcomingPinId !== selectedPin?.id) {
+      const pin = pins.find((p) => p.id === upcomingPinId)
+      if (pin) {
+        rings.push({
+          lat: pin.lat,
+          lng: pin.lng,
+          color: hexToRgb('#4dabf7'), // the app's accent blue, not tied to any pin kind's color
+          maxR: 3.5,
+          propagationSpeed: 1.6,
+          repeatPeriod: 1800,
+        })
+      }
+    }
+    return rings
+  }, [selectedPin, upcomingPinId, pins])
 
   const filteredPins = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -883,6 +946,17 @@ export default function MapTab() {
               )
             }
           }}
+          ringsData={ringsData}
+          ringLat={(d) => (d as RingDatum).lat}
+          ringLng={(d) => (d as RingDatum).lng}
+          ringAltitude={0.001}
+          ringColor={(d: object) => {
+            const [r, g, b] = (d as RingDatum).color
+            return (t: number) => `rgba(${r}, ${g}, ${b}, ${Math.sqrt(Math.max(0, 1 - t))})`
+          }}
+          ringMaxRadius={(d) => (d as RingDatum).maxR}
+          ringPropagationSpeed={(d) => (d as RingDatum).propagationSpeed}
+          ringRepeatPeriod={(d) => (d as RingDatum).repeatPeriod}
           htmlElementsData={markerElementsData}
           htmlLat={(d) => (d as Pin | LegLabelDatum).lat}
           htmlLng={(d) => (d as Pin | LegLabelDatum).lng}
