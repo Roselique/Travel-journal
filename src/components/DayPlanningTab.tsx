@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   DAY_ITEM_CATEGORIES,
   useTravelStore,
+  type ChecklistItem,
   type DayPlanItem,
   type Pin,
   type Trip,
@@ -743,6 +744,105 @@ function PlacesOverview({ pin, items }: { pin: Pin; items: DayPlanItem[] }) {
   )
 }
 
+// A handful of commonly-forgotten items, offered as a one-click starting
+// point rather than forcing everyone to type the same basics every trip.
+const PACKING_SUGGESTIONS = [
+  'Passport / ID',
+  'Phone charger',
+  'Travel adapter',
+  'Toiletries',
+  'Medication',
+  'Change of clothes',
+  'Headphones',
+  'Reusable water bottle',
+]
+
+function PackingList({
+  tripId,
+  items,
+  addItem,
+  updateItem,
+  deleteItem,
+}: {
+  tripId: string
+  items: ChecklistItem[]
+  addItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
+  updateItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
+  deleteItem: (id: string) => void
+}) {
+  const [text, setText] = useState('')
+  const packedCount = items.filter((i) => i.checked).length
+
+  return (
+    <div className="packing-panel">
+      <div className="places-overview-top">
+        <div className="section-label">Packing list</div>
+        {items.length > 0 && (
+          <div className="places-overview-stats">
+            {packedCount}/{items.length} packed
+          </div>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <ul className="packing-list">
+          {items.map((item) => (
+            <li key={item.id} className="packing-item">
+              <label className="packing-item-label">
+                <input
+                  type="checkbox"
+                  checked={item.checked}
+                  onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
+                />
+                <span className={`packing-item-text ${item.checked ? 'checked' : ''}`}>
+                  {item.text}
+                </span>
+              </label>
+              <button type="button" className="danger small" onClick={() => deleteItem(item.id)}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="packing-add-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!text.trim()) return
+          addItem({ tripId, text: text.trim(), checked: false })
+          setText('')
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Add an item, e.g. Passport"
+          maxLength={120}
+        />
+        <button type="submit" className="primary small">
+          Add
+        </button>
+      </form>
+
+      {items.length === 0 && (
+        <button
+          type="button"
+          className="small packing-suggest-btn"
+          onClick={() => {
+            for (const suggestion of PACKING_SUGGESTIONS) {
+              addItem({ tripId, text: suggestion, checked: false })
+            }
+          }}
+        >
+          + Add common items
+        </button>
+      )}
+    </div>
+  )
+}
+
 type TripDraft = { name: string; destination: string; tripStart: string; tripEnd: string }
 
 function TripForm({
@@ -857,6 +957,7 @@ function TripDetail({
   pins,
   dayPlanItems,
   dayLocations,
+  checklistItems,
   onBack,
   onUpdateTrip,
   onDeleteTrip,
@@ -864,11 +965,15 @@ function TripDetail({
   updateDayPlanItem,
   deleteDayPlanItem,
   setDayLocation,
+  addChecklistItem,
+  updateChecklistItem,
+  deleteChecklistItem,
 }: {
   trip: Trip
   pins: Pin[]
   dayPlanItems: DayPlanItem[]
   dayLocations: Record<string, string>
+  checklistItems: ChecklistItem[]
   onBack: () => void
   onUpdateTrip: (patch: TripDraft) => void
   onDeleteTrip: () => void
@@ -876,6 +981,9 @@ function TripDetail({
   updateDayPlanItem: (id: string, patch: Partial<Omit<DayPlanItem, 'id'>>) => void
   deleteDayPlanItem: (id: string) => void
   setDayLocation: (tripId: string, date: string, pinId: string) => void
+  addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
+  updateChecklistItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
+  deleteChecklistItem: (id: string) => void
 }) {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [editingTrip, setEditingTrip] = useState(false)
@@ -1007,6 +1115,17 @@ function TripDetail({
       </div>
 
       <div className="journey-section">
+        <h3>Packing list</h3>
+        <PackingList
+          tripId={trip.id}
+          items={checklistItems}
+          addItem={addChecklistItem}
+          updateItem={updateChecklistItem}
+          deleteItem={deleteChecklistItem}
+        />
+      </div>
+
+      <div className="journey-section">
         <h3>Your journey</h3>
         <JourneyMap stops={routeStops} />
       </div>
@@ -1100,6 +1219,7 @@ export default function DayPlanningTab() {
   const trips = useTravelStore((s) => s.trips)
   const dayPlanItems = useTravelStore((s) => s.dayPlanItems)
   const dayLocations = useTravelStore((s) => s.dayLocations)
+  const checklistItems = useTravelStore((s) => s.checklistItems)
   const addTrip = useTravelStore((s) => s.addTrip)
   const updateTrip = useTravelStore((s) => s.updateTrip)
   const deleteTrip = useTravelStore((s) => s.deleteTrip)
@@ -1107,6 +1227,9 @@ export default function DayPlanningTab() {
   const updateDayPlanItem = useTravelStore((s) => s.updateDayPlanItem)
   const deleteDayPlanItem = useTravelStore((s) => s.deleteDayPlanItem)
   const setDayLocation = useTravelStore((s) => s.setDayLocation)
+  const addChecklistItem = useTravelStore((s) => s.addChecklistItem)
+  const updateChecklistItem = useTravelStore((s) => s.updateChecklistItem)
+  const deleteChecklistItem = useTravelStore((s) => s.deleteChecklistItem)
 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [creatingTrip, setCreatingTrip] = useState(false)
@@ -1121,12 +1244,14 @@ export default function DayPlanningTab() {
         .filter(([key]) => key.startsWith(`${selectedTrip.id}::`))
         .map(([key, pinId]) => [key.slice(selectedTrip.id.length + 2), pinId]),
     )
+    const tripChecklistItems = checklistItems.filter((c) => c.tripId === selectedTrip.id)
     return (
       <TripDetail
         trip={selectedTrip}
         pins={pins}
         dayPlanItems={tripItems}
         dayLocations={tripDayLocations}
+        checklistItems={tripChecklistItems}
         onBack={() => setSelectedTripId(null)}
         onUpdateTrip={(data) => updateTrip(selectedTrip.id, data)}
         onDeleteTrip={() => {
@@ -1137,6 +1262,9 @@ export default function DayPlanningTab() {
         updateDayPlanItem={updateDayPlanItem}
         deleteDayPlanItem={deleteDayPlanItem}
         setDayLocation={setDayLocation}
+        addChecklistItem={addChecklistItem}
+        updateChecklistItem={updateChecklistItem}
+        deleteChecklistItem={deleteChecklistItem}
       />
     )
   }

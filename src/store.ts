@@ -93,6 +93,14 @@ export interface Trip {
   createdAt: number
 }
 
+export interface ChecklistItem {
+  id: string
+  tripId: string
+  text: string
+  checked: boolean
+  createdAt: number
+}
+
 function dayLocationKey(tripId: string, date: string): string {
   return `${tripId}::${date}`
 }
@@ -103,6 +111,7 @@ interface TravelState {
   trips: Trip[]
   dayPlanItems: DayPlanItem[]
   dayLocations: Record<string, string> // `${tripId}::${date}` -> pinId, the overall place for that day
+  checklistItems: ChecklistItem[]
 
   addPin: (pin: Omit<Pin, 'id' | 'createdAt'>) => string
   updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
@@ -121,6 +130,10 @@ interface TravelState {
   deleteDayPlanItem: (id: string) => void
 
   setDayLocation: (tripId: string, date: string, pinId: string) => void
+
+  addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
+  updateChecklistItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
+  deleteChecklistItem: (id: string) => void
 }
 
 export const useTravelStore = create<TravelState>()(
@@ -131,6 +144,7 @@ export const useTravelStore = create<TravelState>()(
       trips: [],
       dayPlanItems: [],
       dayLocations: {},
+      checklistItems: [],
 
       addPin: (pin) => {
         const id = uuid()
@@ -173,6 +187,7 @@ export const useTravelStore = create<TravelState>()(
           dayLocations: Object.fromEntries(
             Object.entries(state.dayLocations).filter(([key]) => !key.startsWith(`${id}::`)),
           ),
+          checklistItems: state.checklistItems.filter((c) => c.tripId !== id),
         }))
       },
 
@@ -233,10 +248,33 @@ export const useTravelStore = create<TravelState>()(
           return { dayLocations }
         })
       },
+
+      addChecklistItem: (item) => {
+        const id = uuid()
+        set((state) => ({
+          checklistItems: [
+            ...state.checklistItems,
+            { ...item, id, createdAt: Date.now() },
+          ],
+        }))
+        return id
+      },
+      updateChecklistItem: (id, patch) => {
+        set((state) => ({
+          checklistItems: state.checklistItems.map((c) =>
+            c.id === id ? { ...c, ...patch } : c,
+          ),
+        }))
+      },
+      deleteChecklistItem: (id) => {
+        set((state) => ({
+          checklistItems: state.checklistItems.filter((c) => c.id !== id),
+        }))
+      },
     }),
     {
       name: 'travel-journal-storage',
-      version: 12,
+      version: 13,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
@@ -247,6 +285,7 @@ export const useTravelStore = create<TravelState>()(
           tripStart?: string
           tripEnd?: string
           dayLocations?: Record<string, string>
+          checklistItems?: ChecklistItem[]
         }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
@@ -319,6 +358,7 @@ export const useTravelStore = create<TravelState>()(
 
         delete state.tripStart
         delete state.tripEnd
+        state.checklistItems = state.checklistItems ?? []
         return state
       },
     },
