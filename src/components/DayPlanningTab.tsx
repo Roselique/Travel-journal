@@ -3,7 +3,9 @@ import {
   DAY_ITEM_CATEGORIES,
   useTravelStore,
   type ChecklistItem,
+  type ChecklistKind,
   type DayPlanItem,
+  type ExpenseItem,
   type Pin,
   type Trip,
 } from '../store'
@@ -744,8 +746,9 @@ function PlacesOverview({ pin, items }: { pin: Pin; items: DayPlanItem[] }) {
   )
 }
 
-// A handful of commonly-forgotten items, offered as a one-click starting
-// point rather than forcing everyone to type the same basics every trip.
+// A handful of commonly-forgotten items/tasks, offered as a one-click
+// starting point rather than forcing everyone to type the same basics
+// every trip.
 const PACKING_SUGGESTIONS = [
   'Passport / ID',
   'Phone charger',
@@ -757,104 +760,345 @@ const PACKING_SUGGESTIONS = [
   'Reusable water bottle',
 ]
 
-function PackingList({
+const PRETRIP_SUGGESTIONS = [
+  'Check passport expiry',
+  'Arrange travel insurance',
+  'Notify bank of travel dates',
+  'Book airport transport',
+  'Arrange pet / house sitter',
+  'Check visa requirements',
+  'Set an out-of-office reply',
+  'Download offline maps',
+]
+
+const EXPENSE_CATEGORIES = ['Transport', 'Lodging', 'Food', 'Activities', 'Shopping', 'Other']
+
+// Shared rendering for both the packing list and the pre-trip checklist -
+// same shape (check items off, add one, bulk-fill common ones), just a
+// different kind, suggestion set and placeholder.
+function ChecklistSection({
   tripId,
+  kind,
   items,
+  suggestions,
+  placeholder,
   addItem,
   updateItem,
   deleteItem,
 }: {
   tripId: string
+  kind: ChecklistKind
   items: ChecklistItem[]
+  suggestions: string[]
+  placeholder: string
   addItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
   updateItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
   deleteItem: (id: string) => void
 }) {
   const [text, setText] = useState('')
+  const doneCount = items.filter((i) => i.checked).length
+
+  return (
+    <div>
+      {items.length > 0 && (
+        <div className="checklist-progress">
+          {doneCount}/{items.length} done
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <ul className="packing-list">
+          {items.map((item) => (
+            <li key={item.id} className="packing-item">
+              <label className="packing-item-label">
+                <input
+                  type="checkbox"
+                  checked={item.checked}
+                  onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
+                />
+                <span className={`packing-item-text ${item.checked ? 'checked' : ''}`}>
+                  {item.text}
+                </span>
+              </label>
+              <button type="button" className="danger small" onClick={() => deleteItem(item.id)}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="packing-add-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!text.trim()) return
+          addItem({ tripId, kind, text: text.trim(), checked: false })
+          setText('')
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={placeholder}
+          maxLength={120}
+        />
+        <button type="submit" className="primary small">
+          Add
+        </button>
+      </form>
+
+      {items.length === 0 && (
+        <button
+          type="button"
+          className="small packing-suggest-btn"
+          onClick={() => {
+            for (const suggestion of suggestions) {
+              addItem({ tripId, kind, text: suggestion, checked: false })
+            }
+          }}
+        >
+          + Add common items
+        </button>
+      )}
+    </div>
+  )
+}
+
+function BudgetTracking({
+  trip,
+  items,
+  updateTrip,
+  addItem,
+  deleteItem,
+}: {
+  trip: Trip
+  items: ExpenseItem[]
+  updateTrip: (patch: Partial<Omit<Trip, 'id'>>) => void
+  addItem: (item: Omit<ExpenseItem, 'id' | 'createdAt'>) => string
+  deleteItem: (id: string) => void
+}) {
+  const [description, setDescription] = useState('')
+  const [amount, setAmount] = useState('')
+  const [category, setCategory] = useState('')
+
+  const total = items.reduce((sum, e) => sum + e.amount, 0)
+  const hasBudget = trip.budget > 0
+  const pct = hasBudget ? Math.min(100, (total / trip.budget) * 100) : 0
+  const overBudget = hasBudget && total > trip.budget
+
+  return (
+    <div>
+      <div className="budget-summary-row">
+        <div className="budget-total">
+          {trip.currency}
+          {total.toFixed(2)}
+          {hasBudget && (
+            <span className="budget-of">
+              {' '}
+              of {trip.currency}
+              {trip.budget.toFixed(2)}
+            </span>
+          )}
+        </div>
+        <label className="budget-setting">
+          Budget
+          <input
+            type="number"
+            min="0"
+            value={trip.budget || ''}
+            onChange={(e) => updateTrip({ budget: Number(e.target.value) || 0 })}
+            placeholder="e.g. 1000"
+          />
+        </label>
+        <label className="budget-setting budget-currency">
+          Currency
+          <input
+            value={trip.currency}
+            onChange={(e) => updateTrip({ currency: e.target.value })}
+            maxLength={3}
+          />
+        </label>
+      </div>
+
+      {hasBudget && (
+        <div className="budget-bar">
+          <div
+            className={`budget-bar-fill ${overBudget ? 'over' : ''}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <ul className="expense-list">
+          {items.map((item) => (
+            <li key={item.id} className="expense-item">
+              <div className="expense-main">
+                <span className="expense-desc">{item.description}</span>
+                {item.category && <span className="expense-category">{item.category}</span>}
+              </div>
+              <span className="expense-amount">
+                {trip.currency}
+                {item.amount.toFixed(2)}
+              </span>
+              <button type="button" className="danger small" onClick={() => deleteItem(item.id)}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="expense-add-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const amt = Number(amount)
+          if (!description.trim() || !amt || amt <= 0) return
+          addItem({ tripId: trip.id, description: description.trim(), amount: amt, category })
+          setDescription('')
+          setAmount('')
+          setCategory('')
+        }}
+      >
+        <input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description, e.g. Hotel deposit"
+          maxLength={120}
+        />
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Amount"
+        />
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">No category</option>
+          {EXPENSE_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className="primary small">
+          Add
+        </button>
+      </form>
+    </div>
+  )
+}
+
+type PrepTab = 'packing' | 'budget' | 'pretrip'
+
+// The pre-trip prep card: packing list, budget tracking, and a pre-trip
+// checklist, switched between as tabs rather than three separate sections
+// so trip prep has one place to look instead of three.
+function TripPrepPanel({
+  trip,
+  packingItems,
+  pretripItems,
+  expenseItems,
+  addChecklistItem,
+  updateChecklistItem,
+  deleteChecklistItem,
+  addExpenseItem,
+  deleteExpenseItem,
+  onUpdateTrip,
+}: {
+  trip: Trip
+  packingItems: ChecklistItem[]
+  pretripItems: ChecklistItem[]
+  expenseItems: ExpenseItem[]
+  addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
+  updateChecklistItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
+  deleteChecklistItem: (id: string) => void
+  addExpenseItem: (item: Omit<ExpenseItem, 'id' | 'createdAt'>) => string
+  deleteExpenseItem: (id: string) => void
+  onUpdateTrip: (patch: Partial<Omit<Trip, 'id'>>) => void
+}) {
+  const [tab, setTab] = useState<PrepTab>('packing')
   const [collapsed, setCollapsed] = useState(false)
-  const packedCount = items.filter((i) => i.checked).length
+
+  const packedCount = packingItems.filter((i) => i.checked).length
+  const pretripDoneCount = pretripItems.filter((i) => i.checked).length
+  const expenseTotal = expenseItems.reduce((sum, e) => sum + e.amount, 0)
 
   return (
     <div className="packing-panel">
-      <button
-        type="button"
-        className="places-overview-top packing-panel-toggle"
-        onClick={() => setCollapsed((prev) => !prev)}
-        aria-expanded={!collapsed}
-      >
-        <div className="section-label">
-          <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>▾</span> Packing list
-        </div>
-        {items.length > 0 && (
-          <div className="places-overview-stats">
-            {packedCount}/{items.length} packed
-          </div>
-        )}
-      </button>
-
-      {!collapsed && (
-        <>
-          {items.length > 0 && (
-            <ul className="packing-list">
-              {items.map((item) => (
-                <li key={item.id} className="packing-item">
-                  <label className="packing-item-label">
-                    <input
-                      type="checkbox"
-                      checked={item.checked}
-                      onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
-                    />
-                    <span className={`packing-item-text ${item.checked ? 'checked' : ''}`}>
-                      {item.text}
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    className="danger small"
-                    onClick={() => deleteItem(item.id)}
-                  >
-                    Delete
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <form
-            className="packing-add-form"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!text.trim()) return
-              addItem({ tripId, text: text.trim(), checked: false })
-              setText('')
-            }}
+      <div className="prep-panel-header">
+        <div className="prep-tabs">
+          <button
+            type="button"
+            className={`journey-city-tab ${tab === 'packing' ? 'active' : ''}`}
+            onClick={() => setTab('packing')}
           >
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Add an item, e.g. Passport"
-              maxLength={120}
-            />
-            <button type="submit" className="primary small">
-              Add
-            </button>
-          </form>
+            Packing list
+            {packingItems.length > 0 && ` (${packedCount}/${packingItems.length})`}
+          </button>
+          <button
+            type="button"
+            className={`journey-city-tab ${tab === 'budget' ? 'active' : ''}`}
+            onClick={() => setTab('budget')}
+          >
+            Budget tracking
+            {expenseItems.length > 0 && ` (${trip.currency}${expenseTotal.toFixed(0)})`}
+          </button>
+          <button
+            type="button"
+            className={`journey-city-tab ${tab === 'pretrip' ? 'active' : ''}`}
+            onClick={() => setTab('pretrip')}
+          >
+            Pre-trip checklist
+            {pretripItems.length > 0 && ` (${pretripDoneCount}/${pretripItems.length})`}
+          </button>
+        </div>
+        <button
+          type="button"
+          className="chevron-btn"
+          onClick={() => setCollapsed((prev) => !prev)}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
+        >
+          <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>▾</span>
+        </button>
+      </div>
 
-          {items.length === 0 && (
-            <button
-              type="button"
-              className="small packing-suggest-btn"
-              onClick={() => {
-                for (const suggestion of PACKING_SUGGESTIONS) {
-                  addItem({ tripId, text: suggestion, checked: false })
-                }
-              }}
-            >
-              + Add common items
-            </button>
-          )}
-        </>
-      )}
+      {!collapsed &&
+        (tab === 'packing' ? (
+          <ChecklistSection
+            tripId={trip.id}
+            kind="packing"
+            items={packingItems}
+            suggestions={PACKING_SUGGESTIONS}
+            placeholder="Add an item, e.g. Passport"
+            addItem={addChecklistItem}
+            updateItem={updateChecklistItem}
+            deleteItem={deleteChecklistItem}
+          />
+        ) : tab === 'pretrip' ? (
+          <ChecklistSection
+            tripId={trip.id}
+            kind="pretrip"
+            items={pretripItems}
+            suggestions={PRETRIP_SUGGESTIONS}
+            placeholder="Add a task, e.g. Renew passport"
+            addItem={addChecklistItem}
+            updateItem={updateChecklistItem}
+            deleteItem={deleteChecklistItem}
+          />
+        ) : (
+          <BudgetTracking
+            trip={trip}
+            items={expenseItems}
+            updateTrip={onUpdateTrip}
+            addItem={addExpenseItem}
+            deleteItem={deleteExpenseItem}
+          />
+        ))}
     </div>
   )
 }
@@ -974,6 +1218,7 @@ function TripDetail({
   dayPlanItems,
   dayLocations,
   checklistItems,
+  expenseItems,
   onBack,
   onUpdateTrip,
   onDeleteTrip,
@@ -984,14 +1229,17 @@ function TripDetail({
   addChecklistItem,
   updateChecklistItem,
   deleteChecklistItem,
+  addExpenseItem,
+  deleteExpenseItem,
 }: {
   trip: Trip
   pins: Pin[]
   dayPlanItems: DayPlanItem[]
   dayLocations: Record<string, string>
   checklistItems: ChecklistItem[]
+  expenseItems: ExpenseItem[]
   onBack: () => void
-  onUpdateTrip: (patch: TripDraft) => void
+  onUpdateTrip: (patch: Partial<Omit<Trip, 'id'>>) => void
   onDeleteTrip: () => void
   addDayPlanItem: (item: Omit<DayPlanItem, 'id' | 'createdAt'>) => string
   updateDayPlanItem: (id: string, patch: Partial<Omit<DayPlanItem, 'id'>>) => void
@@ -1000,10 +1248,21 @@ function TripDetail({
   addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
   updateChecklistItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
   deleteChecklistItem: (id: string) => void
+  addExpenseItem: (item: Omit<ExpenseItem, 'id' | 'createdAt'>) => string
+  deleteExpenseItem: (id: string) => void
 }) {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [editingTrip, setEditingTrip] = useState(false)
   const [overviewPinId, setOverviewPinId] = useState<string | null>(null)
+
+  const packingItems = useMemo(
+    () => checklistItems.filter((c) => c.kind === 'packing'),
+    [checklistItems],
+  )
+  const pretripItems = useMemo(
+    () => checklistItems.filter((c) => c.kind === 'pretrip'),
+    [checklistItems],
+  )
 
   // The trip's start/end dates always win, so the day list reads like a
   // real itinerary (including quiet days with nothing planned yet) rather
@@ -1131,13 +1390,18 @@ function TripDetail({
       </div>
 
       <div className="journey-section">
-        <h3>Packing list</h3>
-        <PackingList
-          tripId={trip.id}
-          items={checklistItems}
-          addItem={addChecklistItem}
-          updateItem={updateChecklistItem}
-          deleteItem={deleteChecklistItem}
+        <h3>Trip prep</h3>
+        <TripPrepPanel
+          trip={trip}
+          packingItems={packingItems}
+          pretripItems={pretripItems}
+          expenseItems={expenseItems}
+          addChecklistItem={addChecklistItem}
+          updateChecklistItem={updateChecklistItem}
+          deleteChecklistItem={deleteChecklistItem}
+          addExpenseItem={addExpenseItem}
+          deleteExpenseItem={deleteExpenseItem}
+          onUpdateTrip={onUpdateTrip}
         />
       </div>
 
@@ -1236,6 +1500,7 @@ export default function DayPlanningTab() {
   const dayPlanItems = useTravelStore((s) => s.dayPlanItems)
   const dayLocations = useTravelStore((s) => s.dayLocations)
   const checklistItems = useTravelStore((s) => s.checklistItems)
+  const expenseItems = useTravelStore((s) => s.expenseItems)
   const addTrip = useTravelStore((s) => s.addTrip)
   const updateTrip = useTravelStore((s) => s.updateTrip)
   const deleteTrip = useTravelStore((s) => s.deleteTrip)
@@ -1246,6 +1511,8 @@ export default function DayPlanningTab() {
   const addChecklistItem = useTravelStore((s) => s.addChecklistItem)
   const updateChecklistItem = useTravelStore((s) => s.updateChecklistItem)
   const deleteChecklistItem = useTravelStore((s) => s.deleteChecklistItem)
+  const addExpenseItem = useTravelStore((s) => s.addExpenseItem)
+  const deleteExpenseItem = useTravelStore((s) => s.deleteExpenseItem)
 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [creatingTrip, setCreatingTrip] = useState(false)
@@ -1261,6 +1528,7 @@ export default function DayPlanningTab() {
         .map(([key, pinId]) => [key.slice(selectedTrip.id.length + 2), pinId]),
     )
     const tripChecklistItems = checklistItems.filter((c) => c.tripId === selectedTrip.id)
+    const tripExpenseItems = expenseItems.filter((e) => e.tripId === selectedTrip.id)
     return (
       <TripDetail
         trip={selectedTrip}
@@ -1268,6 +1536,7 @@ export default function DayPlanningTab() {
         dayPlanItems={tripItems}
         dayLocations={tripDayLocations}
         checklistItems={tripChecklistItems}
+        expenseItems={tripExpenseItems}
         onBack={() => setSelectedTripId(null)}
         onUpdateTrip={(data) => updateTrip(selectedTrip.id, data)}
         onDeleteTrip={() => {
@@ -1281,6 +1550,8 @@ export default function DayPlanningTab() {
         addChecklistItem={addChecklistItem}
         updateChecklistItem={updateChecklistItem}
         deleteChecklistItem={deleteChecklistItem}
+        addExpenseItem={addExpenseItem}
+        deleteExpenseItem={deleteExpenseItem}
       />
     )
   }
@@ -1315,7 +1586,7 @@ export default function DayPlanningTab() {
         {creatingTrip ? (
           <TripForm
             onSave={(data) => {
-              const id = addTrip(data)
+              const id = addTrip({ ...data, budget: 0, currency: '$' })
               setCreatingTrip(false)
               setSelectedTripId(id)
             }}

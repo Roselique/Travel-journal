@@ -90,14 +90,28 @@ export interface Trip {
   destination: string // free-form, e.g. "Japan"
   tripStart: string // ISO date, empty if unset
   tripEnd: string // ISO date, empty if unset
+  budget: number // 0 = no budget set
+  currency: string // e.g. "$", "€", "¥"
   createdAt: number
 }
+
+export type ChecklistKind = 'packing' | 'pretrip'
 
 export interface ChecklistItem {
   id: string
   tripId: string
+  kind: ChecklistKind
   text: string
   checked: boolean
+  createdAt: number
+}
+
+export interface ExpenseItem {
+  id: string
+  tripId: string
+  description: string
+  amount: number
+  category: string // free-form, empty if unset
   createdAt: number
 }
 
@@ -112,6 +126,7 @@ interface TravelState {
   dayPlanItems: DayPlanItem[]
   dayLocations: Record<string, string> // `${tripId}::${date}` -> pinId, the overall place for that day
   checklistItems: ChecklistItem[]
+  expenseItems: ExpenseItem[]
 
   addPin: (pin: Omit<Pin, 'id' | 'createdAt'>) => string
   updatePin: (id: string, patch: Partial<Omit<Pin, 'id'>>) => void
@@ -134,6 +149,10 @@ interface TravelState {
   addChecklistItem: (item: Omit<ChecklistItem, 'id' | 'createdAt'>) => string
   updateChecklistItem: (id: string, patch: Partial<Omit<ChecklistItem, 'id'>>) => void
   deleteChecklistItem: (id: string) => void
+
+  addExpenseItem: (item: Omit<ExpenseItem, 'id' | 'createdAt'>) => string
+  updateExpenseItem: (id: string, patch: Partial<Omit<ExpenseItem, 'id'>>) => void
+  deleteExpenseItem: (id: string) => void
 }
 
 export const useTravelStore = create<TravelState>()(
@@ -145,6 +164,7 @@ export const useTravelStore = create<TravelState>()(
       dayPlanItems: [],
       dayLocations: {},
       checklistItems: [],
+      expenseItems: [],
 
       addPin: (pin) => {
         const id = uuid()
@@ -188,6 +208,7 @@ export const useTravelStore = create<TravelState>()(
             Object.entries(state.dayLocations).filter(([key]) => !key.startsWith(`${id}::`)),
           ),
           checklistItems: state.checklistItems.filter((c) => c.tripId !== id),
+          expenseItems: state.expenseItems.filter((e) => e.tripId !== id),
         }))
       },
 
@@ -271,10 +292,33 @@ export const useTravelStore = create<TravelState>()(
           checklistItems: state.checklistItems.filter((c) => c.id !== id),
         }))
       },
+
+      addExpenseItem: (item) => {
+        const id = uuid()
+        set((state) => ({
+          expenseItems: [
+            ...state.expenseItems,
+            { ...item, id, createdAt: Date.now() },
+          ],
+        }))
+        return id
+      },
+      updateExpenseItem: (id, patch) => {
+        set((state) => ({
+          expenseItems: state.expenseItems.map((e) =>
+            e.id === id ? { ...e, ...patch } : e,
+          ),
+        }))
+      },
+      deleteExpenseItem: (id) => {
+        set((state) => ({
+          expenseItems: state.expenseItems.filter((e) => e.id !== id),
+        }))
+      },
     }),
     {
       name: 'travel-journal-storage',
-      version: 13,
+      version: 14,
       migrate: (persisted) => {
         const state = persisted as {
           pins?: Pin[]
@@ -285,7 +329,8 @@ export const useTravelStore = create<TravelState>()(
           tripStart?: string
           tripEnd?: string
           dayLocations?: Record<string, string>
-          checklistItems?: ChecklistItem[]
+          checklistItems?: (ChecklistItem & { kind?: ChecklistKind })[]
+          expenseItems?: ExpenseItem[]
         }
         if (state.pins) {
           state.pins = state.pins.map((p) => ({
@@ -330,8 +375,15 @@ export const useTravelStore = create<TravelState>()(
           destination: '',
           tripStart: state.tripStart ?? '',
           tripEnd: state.tripEnd ?? '',
+          budget: 0,
+          currency: '$',
           createdAt: Date.now(),
         }] : [])
+        state.trips = state.trips.map((t) => ({
+          ...t,
+          budget: t.budget ?? 0,
+          currency: t.currency ?? '$',
+        }))
 
         state.dayPlanItems = (state.dayPlanItems ?? []).map((d) => {
           const { pinId: _pinId, ...rest } = d
@@ -358,7 +410,14 @@ export const useTravelStore = create<TravelState>()(
 
         delete state.tripStart
         delete state.tripEnd
-        state.checklistItems = state.checklistItems ?? []
+        // Existing checklist items predate the packing/pre-trip split -
+        // they were all packing items, so default them there rather than
+        // losing their kind and having them vanish from both tabs.
+        state.checklistItems = (state.checklistItems ?? []).map((c) => ({
+          ...c,
+          kind: c.kind ?? 'packing',
+        }))
+        state.expenseItems = state.expenseItems ?? []
         return state
       },
     },
