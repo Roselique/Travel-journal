@@ -771,73 +771,89 @@ function PackingList({
   deleteItem: (id: string) => void
 }) {
   const [text, setText] = useState('')
+  const [collapsed, setCollapsed] = useState(false)
   const packedCount = items.filter((i) => i.checked).length
 
   return (
     <div className="packing-panel">
-      <div className="places-overview-top">
-        <div className="section-label">Packing list</div>
+      <button
+        type="button"
+        className="places-overview-top packing-panel-toggle"
+        onClick={() => setCollapsed((prev) => !prev)}
+        aria-expanded={!collapsed}
+      >
+        <div className="section-label">
+          <span className={`chevron ${collapsed ? 'collapsed' : ''}`}>▾</span> Packing list
+        </div>
         {items.length > 0 && (
           <div className="places-overview-stats">
             {packedCount}/{items.length} packed
           </div>
         )}
-      </div>
+      </button>
 
-      {items.length > 0 && (
-        <ul className="packing-list">
-          {items.map((item) => (
-            <li key={item.id} className="packing-item">
-              <label className="packing-item-label">
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
-                />
-                <span className={`packing-item-text ${item.checked ? 'checked' : ''}`}>
-                  {item.text}
-                </span>
-              </label>
-              <button type="button" className="danger small" onClick={() => deleteItem(item.id)}>
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {!collapsed && (
+        <>
+          {items.length > 0 && (
+            <ul className="packing-list">
+              {items.map((item) => (
+                <li key={item.id} className="packing-item">
+                  <label className="packing-item-label">
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
+                    />
+                    <span className={`packing-item-text ${item.checked ? 'checked' : ''}`}>
+                      {item.text}
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className="danger small"
+                    onClick={() => deleteItem(item.id)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
-      <form
-        className="packing-add-form"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (!text.trim()) return
-          addItem({ tripId, text: text.trim(), checked: false })
-          setText('')
-        }}
-      >
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Add an item, e.g. Passport"
-          maxLength={120}
-        />
-        <button type="submit" className="primary small">
-          Add
-        </button>
-      </form>
+          <form
+            className="packing-add-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!text.trim()) return
+              addItem({ tripId, text: text.trim(), checked: false })
+              setText('')
+            }}
+          >
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Add an item, e.g. Passport"
+              maxLength={120}
+            />
+            <button type="submit" className="primary small">
+              Add
+            </button>
+          </form>
 
-      {items.length === 0 && (
-        <button
-          type="button"
-          className="small packing-suggest-btn"
-          onClick={() => {
-            for (const suggestion of PACKING_SUGGESTIONS) {
-              addItem({ tripId, text: suggestion, checked: false })
-            }
-          }}
-        >
-          + Add common items
-        </button>
+          {items.length === 0 && (
+            <button
+              type="button"
+              className="small packing-suggest-btn"
+              onClick={() => {
+                for (const suggestion of PACKING_SUGGESTIONS) {
+                  addItem({ tripId, text: suggestion, checked: false })
+                }
+              }}
+            >
+              + Add common items
+            </button>
+          )}
+        </>
       )}
     </div>
   )
