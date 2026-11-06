@@ -37,9 +37,8 @@ interface PendingPin {
   lng: number
 }
 
-// Pulsing ring beacon on the globe surface, drawn for the pin currently
-// open in the side panel and for the trip's next upcoming stop, so either
-// one is easy to spot even with many pins on screen.
+// Pulsing ring beacon drawn around the pin currently open in the side
+// panel, so it's easy to spot on a globe with many pins.
 interface RingDatum {
   lat: number
   lng: number
@@ -47,11 +46,6 @@ interface RingDatum {
   maxR: number
   propagationSpeed: number
   repeatPeriod: number
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const n = Number.parseInt(hex.replace('#', ''), 16)
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
 // Route-arc label datum, distinguished from a Pin by the `__legLabel` tag so
@@ -412,7 +406,6 @@ export default function MapTab() {
   const addPin = useTravelStore((s) => s.addPin)
   const updatePin = useTravelStore((s) => s.updatePin)
   const deletePin = useTravelStore((s) => s.deletePin)
-  const dayLocations = useTravelStore((s) => s.dayLocations)
 
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -422,6 +415,10 @@ export default function MapTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [routeIds, setRouteIds] = useState<string[]>([])
+  // react-globe.gl's default camera altitude, kept in sync via onZoom so
+  // the selected-pin ring can be sized relative to how zoomed in/out the
+  // view currently is (see ringsData below).
+  const [cameraAltitude, setCameraAltitude] = useState(2.5)
   const [travelMode, setTravelMode] = useState<TravelMode | null>(null)
   // Off by default (a static dashed line); the viewer can opt into an
   // animated dash flowing from the first selected pin to the second.
@@ -466,50 +463,25 @@ export default function MapTab() {
     [pins, selectedId],
   )
 
-  // The nearest day (today or later, across every trip) that's linked to a
-  // pin - i.e. the next place the itinerary actually sends you.
-  const upcomingPinId = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    let bestDate: string | null = null
-    let bestPinId: string | null = null
-    for (const [key, pinId] of Object.entries(dayLocations)) {
-      const date = key.slice(key.indexOf('::') + 2)
-      if (date < today) continue
-      if (bestDate === null || date < bestDate) {
-        bestDate = date
-        bestPinId = pinId
-      }
-    }
-    return bestPinId
-  }, [dayLocations])
-
   const ringsData = useMemo<RingDatum[]>(() => {
-    const rings: RingDatum[] = []
-    if (selectedPin) {
-      rings.push({
+    if (!selectedPin) return []
+    // ringMaxRadius is in degrees of arc on the globe's surface, a fixed
+    // geographic size regardless of camera distance - so a constant value
+    // looks tiny zoomed out (where you most need it to catch the eye) and
+    // oversized zoomed in. Scaling it with the camera's altitude keeps it
+    // visible from far away while shrinking back down on closer zoom.
+    const maxR = Math.min(6, Math.max(0.4, cameraAltitude * 1.2))
+    return [
+      {
         lat: selectedPin.lat,
         lng: selectedPin.lng,
         color: [255, 255, 255],
-        maxR: 4,
+        maxR,
         propagationSpeed: 3,
         repeatPeriod: 1200,
-      })
-    }
-    if (upcomingPinId && upcomingPinId !== selectedPin?.id) {
-      const pin = pins.find((p) => p.id === upcomingPinId)
-      if (pin) {
-        rings.push({
-          lat: pin.lat,
-          lng: pin.lng,
-          color: hexToRgb('#4dabf7'), // the app's accent blue, not tied to any pin kind's color
-          maxR: 3.5,
-          propagationSpeed: 1.6,
-          repeatPeriod: 1800,
-        })
-      }
-    }
-    return rings
-  }, [selectedPin, upcomingPinId, pins])
+      },
+    ]
+  }, [selectedPin, cameraAltitude])
 
   const filteredPins = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -908,6 +880,7 @@ export default function MapTab() {
           onZoom={({ altitude }) => {
             const show = altitude > COUNTRY_LABEL_MIN_ALTITUDE
             setShowCountryLabels((prev) => (prev === show ? prev : show))
+            setCameraAltitude((prev) => (Math.abs(prev - altitude) > 0.01 ? altitude : prev))
           }}
           labelsData={showCountryLabels ? COUNTRY_LABELS : []}
           labelLat={(d) => (d as { lat: number }).lat}
